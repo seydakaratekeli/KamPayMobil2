@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:KamPay.ViewModels"
+             xmlns:models="clr-namespace:KamPay.Models"
+             xmlns:converters="clr-namespace:KamPay.Converters"
+             x:Class="KamPay.Views.OffersPage"
+             x:DataType="vm:OffersViewModel"
+             Title="Tekliflerim">
+
+    <ContentPage.Resources>
+        <converters:EqualityToBoolConverter x:Key="EqualityToBoolConverter"/>
+        <converters:StringIsNotNullOrEmptyConverter x:Key="StringIsNotNullOrEmptyConverter"/>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto, *">
+        <Grid Grid.Row="0" ColumnDefinitions="*,*" Padding="15,10" ColumnSpacing="10">
+            <Button Grid.Column="0" Text="Gelen Teklifler" Command="{Binding SelectIncomingCommand}">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Gray200}" />
+                        <Setter Property="TextColor" Value="{StaticResource Gray600}" />
+                        <Style.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsIncomingSelected}" Value="True">
+                                <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                                <Setter Property="TextColor" Value="White" />
+                                <Setter Property="FontAttributes" Value="Bold"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button Grid.Column="1" Text="Giden Tekliflerim" Command="{Binding SelectOutgoingCommand}">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Gray200}" />
+                        <Setter Property="TextColor" Value="{StaticResource Gray600}" />
+                        <Style.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding IsOutgoingSelected}" Value="True">
+                                <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                                <Setter Property="TextColor" Value="White" />
+                                <Setter Property="FontAttributes" Value="Bold"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </Grid>
+
+        <ActivityIndicator Grid.Row="1" IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" VerticalOptions="Center" HorizontalOptions="Center"/>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding IncomingOffers}" IsVisible="{Binding IsIncomingSelected}">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:Transaction">
+                    <Frame Margin="15,5" Padding="15" BorderColor="{StaticResource Gray300}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label FontAttributes="Bold" Text="{Binding ProductTitle, StringFormat='Talep Edilen Ürün: {0}'}"/>
+                            <Label Text="{Binding BuyerName, StringFormat='Teklif Eden: {0}'}"/>
+                            <Label Text="{Binding OfferMessage, StringFormat='Mesaj: {0}'}" IsVisible="{Binding OfferMessage, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
+                            <Label Text="{Binding OfferedProductTitle, StringFormat='Teklif Edilen Ürün: {0}'}" IsVisible="{Binding OfferedProductTitle, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
+
+                            <HorizontalStackLayout Spacing="10" IsVisible="{Binding Status, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static models:TransactionStatus.Pending}}">
+                                <Button Text="Onayla" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=AcceptOfferCommand}" CommandParameter="{Binding .}" BackgroundColor="{StaticResource Primary}"/>
+                                <Button Text="Reddet" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=RejectOfferCommand}" CommandParameter="{Binding .}" BackgroundColor="{StaticResource Danger}"/>
+                            </HorizontalStackLayout>
+
+                            <Label Text="KABUL EDİLDİ" TextColor="{StaticResource Primary}" FontAttributes="Bold" IsVisible="{Binding Status, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static models:TransactionStatus.Accepted}}"/>
+                            <Label Text="REDDEDİLDİ" TextColor="{StaticResource Danger}" FontAttributes="Bold" IsVisible="{Binding Status, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static models:TransactionStatus.Rejected}}"/>
+                        </VerticalStackLayout>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding OutgoingOffers}" IsVisible="{Binding IsOutgoingSelected}">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:Transaction">
+                    <Frame Margin="15,5" Padding="15" BorderColor="{StaticResource Gray300}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label FontAttributes="Bold" Text="{Binding ProductTitle, StringFormat='İstenen Ürün: {0}'}"/>
+                            <Label Text="{Binding SellerName, StringFormat='Satıcı: {0}'}"/>
+                            <Label FontAttributes="Italic" Text="{Binding Status, StringFormat='Durum: {0}'}" />
+                        </VerticalStackLayout>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

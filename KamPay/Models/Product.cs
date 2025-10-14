@@ -1,0 +1,212 @@
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using System;
+using System.Collections.Generic;
+
+namespace KamPay.Models
+{
+    // Ürün durumu enum
+    public enum ProductCondition
+    {
+        YeniGibi = 0,      // Sıfır ayarında
+        CokIyi = 1,        // Az kullanılmış
+        Iyi = 2,           // Kullanılmış, iyi durumda
+        Orta = 3,          // Kullanım izleri var
+        Kullanilabilir = 4 // Çalışıyor ama eskimiş
+    }
+
+    // Ürün tipi enum
+    public enum ProductType
+    {
+        Satis = 0,  // Satılık
+        Bagis = 1,  // Bağış
+        Takas = 2   // Takas
+    }
+
+    // Kategori modeli
+    public class Category
+    {
+        public string CategoryId { get; set; }
+        public string Name { get; set; }
+        public string IconName { get; set; }
+        public string Description { get; set; }
+
+        public Category()
+        {
+            CategoryId = Guid.NewGuid().ToString();
+        }
+
+        // Varsayılan kategoriler
+        public static List<Category> GetDefaultCategories()
+        {
+            return new List<Category>
+            {
+                new Category { Name = "Elektronik", IconName = "laptop.png", Description = "Bilgisayar, telefon, tablet vb." },
+                new Category { Name = "Kitap ve Kırtasiye", IconName = "book.png", Description = "Ders kitapları, romanlar, defterler" },
+                new Category { Name = "Giyim", IconName = "tshirt.png", Description = "Kıyafet, ayakkabı, aksesuar" },
+                new Category { Name = "Ev Eşyası", IconName = "home.png", Description = "Mobilya, dekorasyon, mutfak" },
+                new Category { Name = "Spor Malzemeleri", IconName = "dumbbell.png", Description = "Spor ekipmanları, kamp malzemeleri" },
+                new Category { Name = "Müzik Aletleri", IconName = "guitar.png", Description = "Enstrümanlar ve aksesuarları" },
+                new Category { Name = "Oyun ve Hobi", IconName = "gamepad.png", Description = "Oyun konsolu, board game, puzzle" },
+                new Category { Name = "Bebek Ürünleri", IconName = "baby.png", Description = "Bebek kıyafeti, oyuncak, ekipman" },
+                new Category { Name = "Diğer", IconName = "grid.png", Description = "Diğer kategorilere uymayan ürünler" }
+            };
+        }
+    }
+
+    // Ürün modeli
+    public partial class Product : ObservableObject
+    {
+        public string ProductId { get; set; }
+        public string Title { get; set; }
+        public string Description { get; set; }
+        public string CategoryId { get; set; }
+        public string CategoryName { get; set; }
+        public bool HasPendingOffer { get; set; }
+
+        // Ürün bilgileri
+        public ProductCondition Condition { get; set; }
+        public ProductType Type { get; set; }
+        public decimal Price { get; set; }
+
+        // Kullanıcı bilgileri
+        public string UserId { get; set; }
+        public string UserName { get; set; }
+        public string UserEmail { get; set; }
+        public string UserPhotoUrl { get; set; }
+
+        // Konum bilgileri
+        public string Location { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+
+        // Fotoğraflar
+        public List<string> ImageUrls { get; set; }
+        public string ThumbnailUrl { get; set; }
+
+        // Durum bilgileri
+        public bool IsActive { get; set; }
+        public bool IsReserved { get; set; }
+        public bool IsSold { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+        public DateTime? SoldAt { get; set; }
+
+        // İstatistikler
+        [ObservableProperty]
+        private int viewCount;
+
+        [ObservableProperty]
+        private int favoriteCount;
+
+        // Takas için
+        public string ExchangePreference { get; set; }
+
+        public Product()
+        {
+            ProductId = Guid.NewGuid().ToString();
+            CreatedAt = DateTime.UtcNow;
+            IsActive = true;
+            IsReserved = false;
+            IsSold = false;
+            ViewCount = 0;
+            FavoriteCount = 0;
+            ImageUrls = new List<string>();
+        }
+
+        // Yardımcı özellikler
+        public string ConditionText => Condition switch
+        {
+            ProductCondition.YeniGibi => "Yeni Gibi",
+            ProductCondition.CokIyi => "Çok İyi",
+            ProductCondition.Iyi => "İyi",
+            ProductCondition.Orta => "Orta",
+            ProductCondition.Kullanilabilir => "Kullanılabilir",
+            _ => "Belirtilmemiş"
+        };
+
+        public string TypeText => Type switch
+        {
+            ProductType.Satis => "Satılık",
+            ProductType.Bagis => "Bağış",
+            ProductType.Takas => "Takas",
+            _ => "Belirtilmemiş"
+        };
+
+        public string PriceText => Type == ProductType.Satis
+            ? $"{Price:N2} ₺"
+            : Type == ProductType.Bagis
+                ? "Ücretsiz"
+                : "Takas";
+
+        public string TimeAgoText
+        {
+            get
+            {
+                var timeSpan = DateTime.UtcNow - CreatedAt;
+
+                if (timeSpan.TotalMinutes < 1)
+                    return "Az önce";
+                if (timeSpan.TotalMinutes < 60)
+                    return $"{(int)timeSpan.TotalMinutes} dakika önce";
+                if (timeSpan.TotalHours < 24)
+                    return $"{(int)timeSpan.TotalHours} saat önce";
+                if (timeSpan.TotalDays < 7)
+                    return $"{(int)timeSpan.TotalDays} gün önce";
+                if (timeSpan.TotalDays < 30)
+                    return $"{(int)(timeSpan.TotalDays / 7)} hafta önce";
+
+                return CreatedAt.ToString("dd MMM yyyy");
+            }
+        }
+
+        public bool HasImages => ImageUrls != null && ImageUrls.Count > 0;
+    }
+
+    // Ürün ekleme/güncelleme için DTO
+    public class ProductRequest
+    {
+        public string Title { get; set; }
+        public string Description { get; set; }
+        public string CategoryId { get; set; }
+        public ProductCondition Condition { get; set; }
+        public ProductType Type { get; set; }
+        public decimal Price { get; set; }
+        public string Location { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public List<string> ImagePaths { get; set; } // Local paths
+        public string ExchangePreference { get; set; }
+
+        public ProductRequest()
+        {
+            ImagePaths = new List<string>();
+        }
+    }
+
+    // Filtreleme için model
+    public class ProductFilter
+    {
+        public string SearchText { get; set; }
+        public string CategoryId { get; set; }
+        public ProductType? Type { get; set; }
+        public ProductCondition? Condition { get; set; }
+        public decimal? MinPrice { get; set; }
+        public decimal? MaxPrice { get; set; }
+        public string Location { get; set; }
+        public bool OnlyActive { get; set; } = true;
+        public bool ExcludeSold { get; set; } = true;
+
+        // Sıralama
+        public ProductSortOption SortBy { get; set; } = ProductSortOption.Newest;
+    }
+
+    public enum ProductSortOption
+    {
+        Newest,        // En yeni
+        Oldest,        // En eski
+        PriceAsc,      // Fiyat artan
+        PriceDesc,     // Fiyat azalan
+        MostViewed,    // En çok görüntülenen
+        MostFavorited  // En çok favorilenen
+    }
+}

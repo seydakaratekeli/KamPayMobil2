@@ -1,0 +1,119 @@
+﻿using Microsoft.Extensions.Logging;
+using CommunityToolkit.Maui;
+using KamPay.Services;
+using KamPay.ViewModels;
+using KamPay.Views;
+using ZXing.Net.Maui;
+using ZXing.Net.Maui.Controls; // Ekle: ZXing.Net.Maui.Controls namespace'i
+using CommunityToolkit.Maui.Core; // Pop-up için gerekli
+
+namespace KamPay
+{
+    public static class MauiProgram
+    {
+        public static MauiApp CreateMauiApp()
+        {
+            var builder = MauiApp.CreateBuilder();
+
+            builder
+                .UseMauiApp<App>()
+                // ZXing.Net.Maui entegrasyonu için aşağıdaki satırı ekleyin:
+                .UseBarcodeReader() // Doğru extension metodu
+                .UseMauiCommunityToolkit()
+                .ConfigureFonts(fonts =>
+                {
+                    fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
+                    fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+                });
+               
+
+            // 📧 E-posta Ayarları
+            // Gerçek değerler IT'den alınmalı (örnek olarak gösteriliyor)
+            var emailSettings = new EmailSettings
+            {
+                SmtpHost = "smtp.bartin.edu.tr",
+                SmtpPort = 587,          // IT'den gelen bilgiye göre 465 de olabilir
+                UseSsl = true,
+                FromEmail = "kampay@bartin.edu.tr",
+                FromName = "KamPay Doğrulama",
+                Username = "kampay@bartin.edu.tr",
+                Password = "SMTP_PAROLASI_BURAYA" // ⚠️ Gerçek uygulamada güvenli kaynakta sakla
+            };
+
+            // Servislerin DI kaydı
+            builder.Services.AddSingleton(emailSettings);
+            builder.Services.AddSingleton<IEmailService, EmailService>();
+
+            // 👇 FirebaseAuthService, constructor'da IEmailService beklediği için bu şekilde ekliyoruz:
+            builder.Services.AddSingleton<IAuthenticationService>(sp =>
+                new FirebaseAuthService(sp.GetRequiredService<IEmailService>())
+            );
+
+            // AppShell'in kendisini ve ViewModel'ini DI container'a kaydediyoruz.
+            builder.Services.AddSingleton<AppShellViewModel>();
+            builder.Services.AddSingleton<AppShell>();
+
+            builder.Services.AddSingleton<IProductService, FirebaseProductService>();
+            builder.Services.AddSingleton<IStorageService, FirebaseStorageService>();
+           
+            builder.Services.AddSingleton<IFavoriteService>(sp =>
+             new FirebaseFavoriteService(sp.GetRequiredService<INotificationService>()));
+            builder.Services.AddSingleton<IMessagingService>(sp =>
+      new FirebaseMessagingService(sp.GetRequiredService<INotificationService>()));
+            builder.Services.AddSingleton<IUserProfileService, FirebaseUserProfileService>();
+            builder.Services.AddSingleton<IQRCodeService, FirebaseQRCodeService>();
+            builder.Services.AddSingleton<ISurpriseBoxService, FirebaseSurpriseBoxService>();
+            builder.Services.AddSingleton<IGoodDeedService, FirebaseGoodDeedService>();
+            builder.Services.AddSingleton<IServiceSharingService, FirebaseServiceSharingService>();
+            builder.Services.AddSingleton<INotificationService, FirebaseNotificationService>();
+            builder.Services.AddSingleton<ITransactionService, FirebaseTransactionService>();
+
+
+            // ViewModels
+            // builder.Services.AddSingleton<AppShellViewModel>(); // Singleton olarak ekliyoruz
+            builder.Services.AddTransient<RegisterViewModel>();
+            builder.Services.AddTransient<LoginViewModel>();
+            builder.Services.AddTransient<MainViewModel>();
+            builder.Services.AddTransient<NotificationsViewModel>();
+            builder.Services.AddTransient<EditProductViewModel>();
+            builder.Services.AddTransient<AddProductViewModel>();
+            builder.Services.AddTransient<ProductListViewModel>();
+            builder.Services.AddTransient<OffersViewModel>();
+            builder.Services.AddTransient<TradeOfferViewModel>();
+
+
+            builder.Services.AddTransient<ProductDetailViewModel>();
+
+            builder.Services.AddTransient<MessagesViewModel>();
+            builder.Services.AddTransient<ChatViewModel>();
+            builder.Services.AddTransient<FavoritesViewModel>();
+            builder.Services.AddTransient<ProfileViewModel>();
+            builder.Services.AddTransient<QRCodeViewModel>();
+            builder.Services.AddTransient<SurpriseBoxViewModel>();
+            builder.Services.AddTransient<GoodDeedBoardViewModel>();
+            builder.Services.AddTransient<ServiceSharingViewModel>();
+            
+            // Views
+            builder.Services.AddTransient<RegisterPage>();
+            builder.Services.AddTransient<LoginPage>();
+            builder.Services.AddTransient<MainPage>();
+            builder.Services.AddTransient<EditProductPage>();
+            builder.Services.AddTransient<AddProductPage>();
+            builder.Services.AddTransient<ProductListPage>();
+            builder.Services.AddTransient<ProductDetailPage>();
+            builder.Services.AddTransient<MessagesPage>();
+            builder.Services.AddTransient<ChatPage>();
+            builder.Services.AddTransient<FavoritesPage>();
+            builder.Services.AddTransient<ProfilePage>();
+            builder.Services.AddTransient<NotificationsPage>();
+            builder.Services.AddTransient<OffersPage>();
+            builder.Services.AddTransient<TradeOfferView>();
+
+#if DEBUG
+            builder.Logging.AddDebug();
+#endif
+
+            return builder.Build();
+        }
+    }
+}

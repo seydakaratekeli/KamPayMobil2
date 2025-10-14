@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage 
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:KamPay.ViewModels"
+        xmlns:models="clr-namespace:KamPay.Models"  x:Class="KamPay.Views.ProductDetailPage"
+
+    Title="Ürün Detayı"
+    Shell.BackgroundColor="#4CAF50">
+
+    <Grid>
+        <!-- ANA İÇERİK -->
+        <ScrollView>
+            <VerticalStackLayout Spacing="0">
+
+                <!-- Görsel Carousel -->
+                <CarouselView ItemsSource="{Binding ProductImages}"
+                              HeightRequest="350"
+                              Position="{Binding CurrentImageIndex}"
+                              IndicatorView="indicatorView">
+                    <CarouselView.ItemTemplate>
+                        <DataTemplate>
+                            <Image Source="{Binding .}"
+                                   Aspect="AspectFill" />
+                        </DataTemplate>
+                    </CarouselView.ItemTemplate>
+                </CarouselView>
+
+                <IndicatorView x:Name="indicatorView"
+                               IndicatorColor="#E0E0E0"
+                               SelectedIndicatorColor="#4CAF50"
+                               HorizontalOptions="Center"
+                               Margin="0,-30,0,10" />
+
+                <!-- Ana İçerik Border -->
+                <Border
+    Stroke="Transparent"
+    BackgroundColor="White"
+    StrokeShape="RoundRectangle 25,25,0,0"
+    Margin="0,-20,0,0"
+    Padding="20">
+
+                    <Border.Shadow>
+                        <Shadow Brush="#80000000"
+                Offset="0,4"
+                Radius="10"
+                Opacity="0.5" />
+                    </Border.Shadow>
+                    <VerticalStackLayout Spacing="15">
+
+                        <!-- Başlık ve Tip Badge -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0"
+                                   Text="{Binding Product.Title}"
+                                   FontSize="24"
+                                   FontAttributes="Bold"
+                                   LineBreakMode="WordWrap" />
+
+                            <Frame Grid.Column="1"
+                                   Padding="10,5"
+                                   CornerRadius="15"
+                                   BackgroundColor="{Binding Product.Type, Converter={StaticResource ProductTypeToBadgeColorConverter}}"
+                                   VerticalOptions="Start">
+                                <Label Text="{Binding Product.TypeText}"
+                                       TextColor="White"
+                                       FontSize="12"
+                                       FontAttributes="Bold" />
+                            </Frame>
+                        </Grid>
+
+                        <!-- Fiyat -->
+                        <Label Text="{Binding Product.PriceText}"
+                               FontSize="28"
+                               FontAttributes="Bold"
+                               TextColor="#4CAF50" />
+
+                        <BoxView HeightRequest="1" BackgroundColor="#E0E0E0" />
+
+                        <!-- Durum ve Kategori -->
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto"
+                              ColumnSpacing="10" RowSpacing="8">
+                            <Label Grid.Row="0" Grid.Column="0" Text="Durum:"
+                                   FontSize="14" TextColor="#757575" FontAttributes="Bold" />
+                            <Label Grid.Row="0" Grid.Column="1" 
+                                   Text="{Binding Product.ConditionText}" FontSize="14" />
+
+                            <Label Grid.Row="1" Grid.Column="0" Text="Kategori:"
+                                   FontSize="14" TextColor="#757575" FontAttributes="Bold" />
+                            <Label Grid.Row="1" Grid.Column="1"
+                                   Text="{Binding Product.CategoryName}" FontSize="14" />
+                        </Grid>
+
+                        <BoxView HeightRequest="1" BackgroundColor="#E0E0E0" />
+
+                        <!-- Açıklama -->
+                        <Label Text="Açıklama"
+                               FontSize="18"
+                               FontAttributes="Bold" />
+                        <Label Text="{Binding Product.Description}"
+                               FontSize="15"
+                               LineBreakMode="WordWrap"
+                               TextColor="#333" />
+
+                        <!-- Konum -->
+                        <Frame IsVisible="{Binding Product.Location, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"
+                               Padding="15"
+                               CornerRadius="10"
+                               BorderColor="#E0E0E0"
+                               BackgroundColor="#F5F5F5">
+                            <Frame.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding OpenLocationCommand}" />
+                            </Frame.GestureRecognizers>
+                            <HorizontalStackLayout Spacing="10">
+                                <Label Text="📍" FontSize="20" VerticalOptions="Center" />
+                                <VerticalStackLayout>
+                                    <Label Text="Konum" FontSize="12" TextColor="#757575" />
+                                    <Label Text="{Binding Product.Location}"
+                                           FontSize="14" FontAttributes="Bold" />
+                                </VerticalStackLayout>
+                            </HorizontalStackLayout>
+                        </Frame>
+
+                        <!-- Takas Tercihi -->
+                        <Frame IsVisible="{Binding Product.ExchangePreference, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"
+                               Padding="15"
+                               CornerRadius="10"
+                               BorderColor="#2196F3"
+                               BackgroundColor="#E3F2FD">
+                            <VerticalStackLayout>
+                                <Label Text="Takas Tercihi"
+                                       FontSize="14"
+                                       TextColor="#1976D2"
+                                       FontAttributes="Bold" />
+                                <Label Text="{Binding Product.ExchangePreference}"
+                                       FontSize="14"
+                                       TextColor="#333"
+                                       Margin="0,5,0,0" />
+                            </VerticalStackLayout>
+                        </Frame>
+
+                        <BoxView HeightRequest="1" BackgroundColor="#E0E0E0" />
+
+                        <!-- Satıcı Bilgisi -->
+                        <Label Text="Satıcı"
+                               FontSize="18"
+                               FontAttributes="Bold" />
+
+                        <Frame Padding="15"
+                               CornerRadius="10"
+                               BorderColor="#E0E0E0">
+                            <HorizontalStackLayout Spacing="15">
+                                <Frame Padding="0"
+                                       WidthRequest="50"
+                                       HeightRequest="50"
+                                       CornerRadius="25"
+                                       IsClippedToBounds="True"
+                                       BackgroundColor="#4CAF50">
+                                    <Label Text="{Binding Product.UserName, StringFormat='{0:0}'}"
+                                           FontSize="24"
+                                           FontAttributes="Bold"
+                                           TextColor="White"
+                                           HorizontalTextAlignment="Center"
+                                           VerticalTextAlignment="Center" />
+                                </Frame>
+
+                                <VerticalStackLayout VerticalOptions="Center">
+                                    <Label Text="{Binding Product.UserName}"
+                                           FontSize="16"
+                                           FontAttributes="Bold" />
+                                    <Label Text="{Binding Product.TimeAgoText}"
+                                           FontSize="12"
+                                           TextColor="#757575" />
+                                </VerticalStackLayout>
+                            </HorizontalStackLayout>
+                        </Frame>
+
+                        <!-- İstatistikler -->
+                        <HorizontalStackLayout Spacing="20"
+                                               HorizontalOptions="Center"
+                                               Margin="0,10">
+                            <VerticalStackLayout HorizontalOptions="Center">
+                                <Label Text="👁" FontSize="24" HorizontalTextAlignment="Center" />
+                                <Label Text="{Binding Product.ViewCount}"
+                                       FontSize="16"
+                                       FontAttributes="Bold"
+                                       HorizontalTextAlignment="Center" />
+                                <Label Text="Görüntülenme"
+                                       FontSize="11"
+                                       TextColor="#757575"
+                                       HorizontalTextAlignment="Center" />
+                            </VerticalStackLayout>
+                        </HorizontalStackLayout>
+
+                        <!-- Sahip için Butonlar -->
+                        <Grid ColumnDefinitions="*,*,*"
+      ColumnSpacing="10"
+      IsVisible="{Binding IsOwner}"
+      Margin="0,10,0,0">
+
+                            <Button Grid.Column="0"
+            Text="Düzenle"
+            Command="{Binding EditProductCommand}"
+            BackgroundColor="{StaticResource Secondary}"
+            TextColor="White" />
+
+                            <Button Grid.Column="1"
+            Text="Satıldı İşaretle"
+            Command="{Binding MarkAsSoldCommand}"
+            IsVisible="{Binding Product.IsSold, Converter={StaticResource InverseBoolConverter}}"
+            BackgroundColor="{StaticResource Primary}"
+            TextColor="White" />
+
+                            <Button Grid.Column="2"
+            Text="Sil"
+            Command="{Binding DeleteProductCommand}"
+            BackgroundColor="{StaticResource Danger}"
+            TextColor="White" />
+
+                        </Grid>
+                        
+                        <!-- Alıcı için Butonlar -->
+                        <Grid ColumnDefinitions="*,*,Auto,Auto"
+      ColumnSpacing="10"
+      IsVisible="{Binding CanContact}"
+      Margin="0,10,0,0">
+
+                            <Button Grid.Column="0"
+            Text="Mesaj Gönder"
+            Command="{Binding ContactSellerCommand}"
+            BackgroundColor="{StaticResource Gray500}"
+            TextColor="White"
+            CornerRadius="10"
+            HeightRequest="50" />
+
+                            <Button Grid.Column="1"
+            Command="{Binding SendRequestCommand}"
+            BackgroundColor="{StaticResource Primary}"
+            TextColor="White"
+            CornerRadius="10"
+            HeightRequest="50">
+                                <Button.Triggers>
+                                    <DataTrigger TargetType="Button" Binding="{Binding Product.Type}" Value="{x:Static models:ProductType.Satis}">
+                                        <Setter Property="Text" Value="Satın Almak İste" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Button" Binding="{Binding Product.Type}" Value="{x:Static models:ProductType.Bagis}">
+                                        <Setter Property="Text" Value="Almak İstiyorum" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Button" Binding="{Binding Product.Type}" Value="{x:Static models:ProductType.Takas}">
+                                        <Setter Property="Text" Value="Takas Teklif Et" />
+                                    </DataTrigger>
+                                </Button.Triggers>
+                            </Button>
+
+                            <Button Grid.Column="2"
+            Command="{Binding ToggleFavoriteCommand}"
+            BackgroundColor="Transparent"
+            BorderColor="#F44336"
+            BorderWidth="2"
+            CornerRadius="10"
+            WidthRequest="50"
+            HeightRequest="50">
+                                <Button.Triggers>
+                                    <DataTrigger TargetType="Button" Binding="{Binding IsFavorite}" Value="True">
+                                        <Setter Property="Text" Value="❤️" />
+                                        <Setter Property="BackgroundColor" Value="#F44336" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Button" Binding="{Binding IsFavorite}" Value="False">
+                                        <Setter Property="Text" Value="🤍" />
+                                        <Setter Property="TextColor" Value="#F44336" />
+                                    </DataTrigger>
+                                </Button.Triggers>
+                            </Button>
+
+                            <Button Grid.Column="3"
+            Text="📤"
+            Command="{Binding ShareProductCommand}"
+            BackgroundColor="#2196F3"
+            TextColor="White"
+            CornerRadius="10"
+            WidthRequest="50"
+            HeightRequest="50" />
+                        </Grid>
+                        
+                        <!-- Ek Aksiyonlar -->
+                        <HorizontalStackLayout HorizontalOptions="Center"
+                                               Spacing="20"
+                                               Margin="0,10,0,0">
+                            <Button Text="🚩 Şikayet Et"
+                                    Command="{Binding ReportProductCommand}"
+                                    BackgroundColor="Transparent"
+                                    TextColor="#F44336"
+                                    FontSize="12" />
+                        </HorizontalStackLayout>
+
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- LOADING OVERLAY -->
+        <Grid IsVisible="{Binding IsLoading}"
+              BackgroundColor="#80000000"
+              InputTransparent="False"
+              VerticalOptions="Fill"
+              HorizontalOptions="Fill">
+            <ActivityIndicator IsRunning="True"
+                               Color="White"
+                               WidthRequest="50"
+                               HeightRequest="50"
+                               VerticalOptions="Center"
+                               HorizontalOptions="Center" />
+        </Grid>
+    </Grid>
+</ContentPage>
