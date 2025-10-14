@@ -1,24 +1,32 @@
-using System.Collections.ObjectModel;
-using System.Diagnostics; // Hata ayýklama için EKLENDÝ
-using System.Linq;
-using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
+ï»¿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Firebase.Database;
+using Firebase.Database.Query;
+using Firebase.Database.Streaming;
+using KamPay.Helpers;
 using KamPay.Models;
 using KamPay.Services;
+using System;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Reactive.Linq;
+using System.Threading.Tasks;
 
 namespace KamPay.ViewModels
 {
-    public partial class OffersViewModel : ObservableObject
+    public partial class OffersViewModel : ObservableObject, IDisposable
     {
         private readonly ITransactionService _transactionService;
         private readonly IAuthenticationService _authService;
+        private IDisposable _incomingOffersSubscription;
+        private IDisposable _outgoingOffersSubscription;
+        private readonly FirebaseClient _firebaseClient = new(Constants.FirebaseRealtimeDbUrl);
 
         public ObservableCollection<Transaction> IncomingOffers { get; } = new();
         public ObservableCollection<Transaction> OutgoingOffers { get; } = new();
 
         [ObservableProperty]
-        private bool isLoading;
+        private bool isLoading = true;
 
         [ObservableProperty]
         private bool isIncomingSelected = true;
@@ -30,62 +38,74 @@ namespace KamPay.ViewModels
         {
             _transactionService = transactionService;
             _authService = authService;
-            // Sayfa açýldýðýnda otomatik yükleme için bu satýr önemli
-            LoadOffersAsync();
+            StartListeningForOffers();
         }
 
-        [RelayCommand]
-        private async Task LoadOffersAsync()
+        private async void StartListeningForOffers()
         {
-            if (IsLoading) return;
-
             IsLoading = true;
-            Debug.WriteLine("[OffersViewModel] Teklifler yükleniyor...");
 
             var currentUser = await _authService.GetCurrentUserAsync();
             if (currentUser == null)
             {
-                Debug.WriteLine("[OffersViewModel HATA] Aktif kullanýcý bulunamadý! Teklifler yüklenemedi.");
                 IsLoading = false;
                 return;
             }
 
-            Debug.WriteLine($"[OffersViewModel] Aktif kullanýcý ID: {currentUser.UserId}");
+            IncomingOffers.Clear();
+            OutgoingOffers.Clear();
 
-            // Gelen Teklifler
-            var incomingResult = await _transactionService.GetIncomingOffersAsync(currentUser.UserId);
-            if (incomingResult.Success && incomingResult.Data != null)
-            {
-                Debug.WriteLine($"[OffersViewModel] {incomingResult.Data.Count} adet gelen teklif bulundu.");
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    IncomingOffers.Clear();
-                    foreach (var offer in incomingResult.Data) IncomingOffers.Add(offer);
-                });
-            }
-            else
-            {
-                Debug.WriteLine($"[OffersViewModel HATA] Gelen teklifler alýnamadý: ");
-            }
+            // ðŸ”¹ Gelen teklifler
+            _incomingOffersSubscription = _firebaseClient
+                .Child(Constants.TransactionsCollection)
+                .OrderBy("SellerId")
+                .EqualTo(currentUser.UserId)
+                .AsObservable<Transaction>()
+                .Subscribe(e => UpdateCollection(IncomingOffers, e));
 
-            // Giden Teklifler
-            var outgoingResult = await _transactionService.GetMyOffersAsync(currentUser.UserId);
-            if (outgoingResult.Success && outgoingResult.Data != null)
-            {
-                Debug.WriteLine($"[OffersViewModel] {outgoingResult.Data.Count} adet giden teklif bulundu.");
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    OutgoingOffers.Clear();
-                    foreach (var offer in outgoingResult.Data) OutgoingOffers.Add(offer);
-                });
-            }
-            else
-            {
-                Debug.WriteLine($"[OffersViewModel HATA] Giden teklifler alýnamadý:");
-            }
+            // ðŸ”¹ Giden teklifler
+            _outgoingOffersSubscription = _firebaseClient
+                .Child(Constants.TransactionsCollection)
+                .OrderBy("BuyerId")
+                .EqualTo(currentUser.UserId)
+                .AsObservable<Transaction>()
+                .Subscribe(e => UpdateCollection(OutgoingOffers, e));
 
             IsLoading = false;
-            Debug.WriteLine("[OffersViewModel] Teklif yükleme tamamlandý.");
+        }
+
+        // ðŸ”¹ GÃœNCELLENDÄ°: FirebaseEvent<T> tipi kullanÄ±lÄ±yor
+        private void UpdateCollection(ObservableCollection<Transaction> collection, FirebaseEvent<Transaction> e)
+        {
+            if (e.Object == null) return;
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                var transaction = e.Object;
+                transaction.TransactionId = e.Key;
+
+                var existing = collection.FirstOrDefault(t => t.TransactionId == transaction.TransactionId);
+
+                switch (e.EventType)
+                {
+                    case FirebaseEventType.InsertOrUpdate:
+                        if (existing != null)
+                        {
+                            var index = collection.IndexOf(existing);
+                            collection[index] = transaction;
+                        }
+                        else
+                        {
+                            collection.Insert(0, transaction);
+                        }
+                        break;
+
+                    case FirebaseEventType.Delete:
+                        if (existing != null)
+                            collection.Remove(existing);
+                        break;
+                }
+            });
         }
 
         [RelayCommand]
@@ -125,12 +145,19 @@ namespace KamPay.ViewModels
                 if (offerInList != null)
                 {
                     offerInList.Status = result.Data.Status;
+                    OnPropertyChanged(nameof(IncomingOffers));
                 }
             }
             else
             {
                 await Application.Current.MainPage.DisplayAlert("Hata", result.Message, "Tamam");
             }
+        }
+
+        public void Dispose()
+        {
+            _incomingOffersSubscription?.Dispose();
+            _outgoingOffersSubscription?.Dispose();
         }
     }
 }

@@ -5,87 +5,120 @@
              x:Class="KamPay.Views.ChatPage"
              Title="{Binding CurrentConversation.OtherUserName}">
 
-    <Grid RowDefinitions="*,Auto">
+    <!-- 🔹 Üst seviye kapsayıcı Grid -->
+    <Grid>
 
-        <CollectionView Grid.Row="0"
-               x:Name="MessagesCollectionView"
-    ItemsSource="{Binding Messages}"
-    ItemsLayout="VerticalList"
-    VerticalScrollBarVisibility="Never"
-    SelectionMode="None"
-    >
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="models:Message">
-                    <Grid Padding="10,5">
-                        <Frame Padding="12"
-                               CornerRadius="15"
-                               BorderColor="Transparent"
-                               HasShadow="False"
-                               MaximumWidthRequest="280">
-                            <Frame.Style>
-                                <Style TargetType="Frame">
-                                    <Setter Property="HorizontalOptions" Value="Start" />
-                                    <Setter Property="BackgroundColor" Value="#E0E0E0" />
-                                    <Style.Triggers>
-                                        <DataTrigger TargetType="Frame" Binding="{Binding IsSentByMe}" Value="True">
-                                            <Setter Property="HorizontalOptions" Value="End" />
-                                            <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Frame.Style>
+        <!-- Asıl içerik -->
+        <Grid RowDefinitions="*,Auto">
 
-                            <VerticalStackLayout Spacing="5">
-                                <Label Text="{Binding Content}"
-                                       LineBreakMode="WordWrap">
-                                    <Label.Style>
-                                        <Style TargetType="Label">
-                                            <Setter Property="TextColor" Value="Black" />
-                                            <Style.Triggers>
-                                                <DataTrigger TargetType="Label" Binding="{Binding IsSentByMe}" Value="True">
-                                                    <Setter Property="TextColor" Value="White" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Label.Style>
-                                </Label>
+            <CollectionView Grid.Row="0"
+                            x:Name="MessagesCollectionView"
+                            ItemsSource="{Binding Messages}"
+                            ItemsLayout="VerticalList"
+                            VerticalScrollBarVisibility="Never"
+                            SelectionMode="None">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:Message">
+                        <Grid Padding="10,5">
+                            <Frame Padding="12"
+                                   CornerRadius="15"
+                                   BorderColor="Transparent"
+                                   HasShadow="False"
+                                   MaximumWidthRequest="280">
+                                <Frame.Style>
+                                    <Style TargetType="Frame">
+                                        <Setter Property="HorizontalOptions" Value="Start" />
+                                        <Setter Property="BackgroundColor" Value="#E0E0E0" />
+                                        <Style.Triggers>
+                                            <DataTrigger TargetType="Frame"
+                                                         Binding="{Binding IsSentByMe}"
+                                                         Value="True">
+                                                <Setter Property="HorizontalOptions" Value="End" />
+                                                <Setter Property="BackgroundColor"
+                                                        Value="{StaticResource Primary}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Frame.Style>
 
-                                <Label Text="{Binding TimeText}"
-                                       FontSize="10"
-                                       HorizontalOptions="End">
-                                    <Label.Style>
-                                        <Style TargetType="Label">
-                                            <Setter Property="TextColor" Value="{StaticResource Gray}" />
-                                            <Style.Triggers>
-                                                <DataTrigger TargetType="Label" Binding="{Binding IsSentByMe}" Value="True">
-                                                    <Setter Property="TextColor" Value="#B2DFDB" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Label.Style>
-                                </Label>
-                            </VerticalStackLayout>
-                        </Frame>
-                    </Grid>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+                                <VerticalStackLayout Spacing="5">
+                                    <Label Text="{Binding Content}"
+                                           LineBreakMode="WordWrap">
+                                        <Label.Style>
+                                            <Style TargetType="Label">
+                                                <Setter Property="TextColor" Value="Black" />
+                                                <Style.Triggers>
+                                                    <DataTrigger TargetType="Label"
+                                                                 Binding="{Binding IsSentByMe}"
+                                                                 Value="True">
+                                                        <Setter Property="TextColor" Value="White" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Label.Style>
+                                    </Label>
 
-        <Frame Grid.Row="1"
-               Padding="10"
-               CornerRadius="0"
-               BorderColor="#E0E0E0"
-               BackgroundColor="White">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                <Entry Grid.Column="0"
-                       Placeholder="Mesajınızı yazın..."
-                       Text="{Binding MessageText}"
-                       ReturnCommand="{Binding SendMessageCommand}" />
-                <Button Grid.Column="1"
-                        Text="Gönder"
-                        Command="{Binding SendMessageCommand}"
-                        WidthRequest="80" />
-            </Grid>
-        </Frame>
+                                    <Label Text="{Binding TimeText}"
+                                           FontSize="10"
+                                           HorizontalOptions="End">
+                                        <Label.Style>
+                                            <Style TargetType="Label">
+                                                <Setter Property="TextColor"
+                                                        Value="{StaticResource Gray}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger TargetType="Label"
+                                                                 Binding="{Binding IsSentByMe}"
+                                                                 Value="True">
+                                                        <Setter Property="TextColor"
+                                                                Value="#B2DFDB" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Label.Style>
+                                    </Label>
+                                </VerticalStackLayout>
+                            </Frame>
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <Frame Grid.Row="1"
+                   Padding="10"
+                   CornerRadius="0"
+                   BorderColor="#E0E0E0"
+                   BackgroundColor="White">
+                <Grid ColumnDefinitions="*,Auto"
+                      ColumnSpacing="10">
+                    <Entry Grid.Column="0"
+                           Placeholder="Mesajınızı yazın..."
+                           Text="{Binding MessageText}"
+                           ReturnCommand="{Binding SendMessageCommand}" />
+                    <Button Grid.Column="1"
+                            Text="Gönder"
+                            Command="{Binding SendMessageCommand}"
+                            WidthRequest="80" />
+                </Grid>
+            </Frame>
+        </Grid>
+
+        <!-- 🔹 Yükleme Katmanı (Overlay) -->
+        <Grid IsVisible="{Binding IsLoading}"
+              BackgroundColor="#80000000"
+              InputTransparent="False">
+            <VerticalStackLayout VerticalOptions="Center"
+                                 HorizontalOptions="Center"
+                                 Spacing="10">
+                <ActivityIndicator IsRunning="True"
+                                   Color="White"
+                                   WidthRequest="50"
+                                   HeightRequest="50" />
+                <Label Text="Yükleniyor..."
+                       TextColor="White"
+                       FontSize="14"
+                       HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
+        </Grid>
+
     </Grid>
 </ContentPage>

@@ -8,20 +8,25 @@ using CommunityToolkit.Mvvm.Messaging;
 using KamPay.Models;
 using KamPay.Services;
 using KamPay.Views;
+using Firebase.Database;
+using Firebase.Database.Query;
+using KamPay.Helpers;
+using System.Reactive.Linq;
 
 namespace KamPay.ViewModels
 {
     // Mesajlar Listesi ViewModel
-    public partial class MessagesViewModel : ObservableObject
+    public partial class MessagesViewModel : ObservableObject, IDisposable
     {
         private readonly IMessagingService _messagingService;
         private readonly IAuthenticationService _authService;
+        private IDisposable _conversationsSubscription;
+        private readonly FirebaseClient _firebaseClient = new(Constants.FirebaseRealtimeDbUrl);
+        private User _currentUser;
 
         [ObservableProperty]
-        private bool isLoading;
+        private bool isLoading = true;
 
-        [ObservableProperty]
-        private bool isRefreshing;
 
         [ObservableProperty]
         private int unreadCount;
@@ -36,70 +41,75 @@ namespace KamPay.ViewModels
             _messagingService = messagingService;
             _authService = authService;
 
-            LoadConversationsAsync();
+            StartListeningForConversations();
         }
 
-        [RelayCommand]
-        private async Task LoadConversationsAsync()
+        private async void StartListeningForConversations()
         {
-            try
-            {
-                IsLoading = true;
-
-                var currentUser = await _authService.GetCurrentUserAsync();
-                if (currentUser == null) return;
-
-                var result = await _messagingService.GetUserConversationsAsync(currentUser.UserId);
-
-                if (result.Success && result.Data != null)
-                {
-                    Conversations.Clear();
-                    foreach (var conversation in result.Data)
-                    {
-                        // ===== YENÝ EKLENEN MANTIK =====
-                        // Her konuþma için "diðer kullanýcýnýn" bilgilerini ayarla
-                        conversation.OtherUserName = conversation.GetOtherUserName(currentUser.UserId);
-                        conversation.OtherUserPhotoUrl = conversation.GetOtherUserPhotoUrl(currentUser.UserId);
-                        conversation.UnreadCount = conversation.GetUnreadCount(currentUser.UserId);
-                        // ===============================
-
-                        Conversations.Add(conversation);
-                    }
-
-                    EmptyMessage = Conversations.Any()
-                        ? string.Empty
-                        : "Henüz mesajýnýz yok\nBir ürün sahibiyle iletiþime geçin!";
-
-                    // Okunmamýþ mesaj sayýsýný güncelle
-                    UnreadCount = Conversations.Sum(c => c.UnreadCount);
-                    WeakReferenceMessenger.Default.Send(new UnreadMessageStatusMessage(UnreadCount > 0));
-
-
-                }
-            }
-            catch (Exception ex)
-            {
-                await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
-            }
-            finally
+            IsLoading = true;
+            _currentUser = await _authService.GetCurrentUserAsync();
+            if (_currentUser == null)
             {
                 IsLoading = false;
+                EmptyMessage = "Sohbetleri görmek için giriþ yapmalýsýnýz.";
+                return;
             }
-        }
 
-        [RelayCommand]
-        private async Task RefreshConversationsAsync()
-        {
-            IsRefreshing = true;
-            await LoadConversationsAsync();
-            IsRefreshing = false;
+            Conversations.Clear();
+
+            _conversationsSubscription = _firebaseClient
+                .Child(Constants.ConversationsCollection)
+                .OrderBy("LastMessageTime")
+                .AsObservable<Conversation>()
+                .Where(e => e.Object != null && e.Object.IsActive && (e.Object.User1Id == _currentUser.UserId || e.Object.User2Id == _currentUser.UserId))
+                .Subscribe(e =>
+                {
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        var conversation = e.Object;
+                        conversation.ConversationId = e.Key;
+                        conversation.OtherUserName = conversation.GetOtherUserName(_currentUser.UserId);
+                        conversation.OtherUserPhotoUrl = conversation.GetOtherUserPhotoUrl(_currentUser.UserId);
+                        conversation.UnreadCount = conversation.GetUnreadCount(_currentUser.UserId);
+
+                        var existingConvo = Conversations.FirstOrDefault(c => c.ConversationId == conversation.ConversationId);
+
+                        if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
+                        {
+                            if (existingConvo != null)
+                            {
+                                // Var olaný güncelle
+                                var index = Conversations.IndexOf(existingConvo);
+                                Conversations[index] = conversation;
+                            }
+                            else
+                            {
+                                // Yeni sohbeti en üste ekle
+                                Conversations.Insert(0, conversation);
+                            }
+                        }
+                        else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
+                        {
+                            if (existingConvo != null)
+                            {
+                                Conversations.Remove(existingConvo);
+                            }
+                        }
+
+                        // Toplam okunmamýþ sayýsýný yeniden hesapla
+                        UnreadCount = Conversations.Sum(c => c.UnreadCount);
+                        WeakReferenceMessenger.Default.Send(new UnreadMessageStatusMessage(UnreadCount > 0));
+
+                        EmptyMessage = Conversations.Any() ? string.Empty : "Henüz mesajýnýz yok.";
+                        IsLoading = false;
+                    });
+                });
         }
 
         [RelayCommand]
         private async Task ConversationTappedAsync(Conversation conversation)
         {
             if (conversation == null) return;
-
             await Shell.Current.GoToAsync($"{nameof(ChatPage)}?conversationId={conversation.ConversationId}");
         }
 
@@ -132,7 +142,11 @@ namespace KamPay.ViewModels
                 await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
             }
         }
+
+        public void Dispose()
+        {
+            _conversationsSubscription?.Dispose();
+        }
     }
 
-
-}
+    }

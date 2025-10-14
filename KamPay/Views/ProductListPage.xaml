@@ -9,7 +9,6 @@
     <Grid RowDefinitions="Auto, *">
 
         <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Padding="15,10" BackgroundColor="White">
-
             <Label Text="KamPay"
                    FontSize="24"
                    FontAttributes="Bold"
@@ -41,73 +40,77 @@
         </Grid>
 
         <Grid Grid.Row="1" BackgroundColor="#F5F5F5">
-            <RefreshView IsRefreshing="{Binding IsRefreshing}"
-                         Command="{Binding RefreshProductsCommand}">
-                <CollectionView ItemsSource="{Binding Products}"
-                                SelectionMode="None">
+            <CollectionView ItemsSource="{Binding Products}"
+                            SelectionMode="None">
 
-                    <CollectionView.Header>
-                        <VerticalStackLayout Padding="10">
-                            <SearchBar Placeholder="Ürün ara..." Text="{Binding SearchText}" SearchCommand="{Binding SearchProductsCommand}"/>
-                            <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never" Margin="0,10">
-                                <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding Categories}">
-                                    <BindableLayout.ItemTemplate>
-                                        <DataTemplate x:DataType="models:Category">
-                                            <Frame Padding="15,10" CornerRadius="20" HasShadow="False"
-                       BackgroundColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToBackgroundConverter}, ConverterParameter={Binding CategoryId}}"
-                       BorderColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToBorderColorConverter}, ConverterParameter={Binding CategoryId}}">
-                                                <Label Text="{Binding Name}" 
-                           TextColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToTextColorConverter}, ConverterParameter={Binding CategoryId}}"/>
-                                                <Frame.GestureRecognizers>
-                                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=CategoryTappedCommand}"
-                                              CommandParameter="{Binding .}"/>
-                                                </Frame.GestureRecognizers>
-                                            </Frame>
-                                        </DataTemplate>
-                                    </BindableLayout.ItemTemplate>
-                                </HorizontalStackLayout>
-                            </ScrollView>
-                        </VerticalStackLayout>
-                    </CollectionView.Header>
+                <CollectionView.Header>
+                    <VerticalStackLayout Padding="10">
+                        <SearchBar Placeholder="Ürün ara..." Text="{Binding SearchText}" SearchCommand="{Binding SearchProductsCommand}"/>
+                        <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never" Margin="0,10">
+                            <HorizontalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding Categories}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="models:Category">
+                                        <Frame Padding="15,10" CornerRadius="20" HasShadow="False"
+                                               BackgroundColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToBackgroundConverter}, ConverterParameter={Binding CategoryId}}"
+                                               BorderColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToBorderColorConverter}, ConverterParameter={Binding CategoryId}}">
+                                            <Label Text="{Binding Name}" 
+                                                   TextColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToTextColorConverter}, ConverterParameter={Binding CategoryId}}"/>
+                                            <Frame.GestureRecognizers>
+                                                <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=CategoryTappedCommand}"
+                                                                      CommandParameter="{Binding .}"/>
+                                            </Frame.GestureRecognizers>
+                                        </Frame>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </HorizontalStackLayout>
+                        </ScrollView>
+                    </VerticalStackLayout>
+                </CollectionView.Header>
 
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:Product">
-                            <Frame Padding="10" CornerRadius="10" Margin="10,5" HasShadow="True">
-                                <Frame.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=ProductTappedCommand}" CommandParameter="{Binding .}" />
-                                </Frame.GestureRecognizers>
-                                <Grid ColumnDefinitions="120, *" ColumnSpacing="10">
-                                    <Image Grid.Column="0" Source="{Binding ThumbnailUrl}" Aspect="AspectFill" HeightRequest="120" />
-                                    <VerticalStackLayout Grid.Column="1" Spacing="5">
-                                        <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="16" />
-                                        <Label Text="{Binding PriceText}" TextColor="{StaticResource Primary}" FontAttributes="Bold" />
-                                        <Label Text="{Binding UserName}" FontSize="12" TextColor="{StaticResource Gray}" />
-                                        <HorizontalStackLayout Spacing="5" Margin="0,5,0,0">
-                                            <Label Text="❤️" />
-                                            <Label Text="{Binding FavoriteCount}" />
-                                            <Label Text="👁️" Margin="10,0,0,0" />
-                                            <Label Text="{Binding ViewCount}" />
-                                        </HorizontalStackLayout>
-                                    </VerticalStackLayout>
-                                </Grid>
-                            </Frame>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:Product">
+                        <Frame Padding="10" CornerRadius="10" Margin="10,5" HasShadow="True">
+                            <Frame.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=ProductTappedCommand}" CommandParameter="{Binding .}" />
+                            </Frame.GestureRecognizers>
+                            <Grid ColumnDefinitions="120, *" ColumnSpacing="10">
+                                <Image Grid.Column="0" Source="{Binding ThumbnailUrl}" Aspect="AspectFill" HeightRequest="120" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="5">
+                                    <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="16" />
+                                    <Label Text="{Binding PriceText}" TextColor="{StaticResource Primary}" FontAttributes="Bold" />
+                                    <Label Text="{Binding UserName}" FontSize="12" TextColor="{StaticResource Gray}" />
+                                    <HorizontalStackLayout Spacing="5" Margin="0,5,0,0">
+                                        <Label Text="❤️" />
+                                        <Label Text="{Binding FavoriteCount}" />
+                                        <Label Text="👁️" Margin="10,0,0,0" />
+                                        <Label Text="{Binding ViewCount}" />
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
 
-                </CollectionView>
-            </RefreshView>
+                <CollectionView.EmptyView>
+                    <StackLayout Padding="20" VerticalOptions="Center" HorizontalOptions="Center">
+                        <Label Text="{Binding EmptyMessage}" HorizontalTextAlignment="Center" />
+                    </StackLayout>
+                </CollectionView.EmptyView>
+
+            </CollectionView>
 
             <Button Text="+"
-        FontSize="24"
-        BackgroundColor="{StaticResource Accent}" TextColor="White"
-        CornerRadius="30"
-        WidthRequest="60"
-        HeightRequest="60"
-        VerticalOptions="End"
-        HorizontalOptions="End"
-        Margin="20"
-        Command="{Binding GoToAddProductCommand}" />
-        </Grid>
+                    FontSize="24"
+                    BackgroundColor="{StaticResource Accent}" TextColor="White"
+                    CornerRadius="30"
+                    WidthRequest="60"
+                    HeightRequest="60"
+                    VerticalOptions="End"
+                    HorizontalOptions="End"
+                    Margin="20"
+                    Command="{Binding GoToAddProductCommand}" />
 
+            <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" Color="{StaticResource Primary}" VerticalOptions="Center" HorizontalOptions="Center"/>
+        </Grid>
     </Grid>
 </ContentPage>
