@@ -22,7 +22,6 @@ namespace KamPay.Services
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
         }
 
-        // Bu yeni metodu servisinize ekleyin
         private async Task CheckAndBroadcastUnreadStatus(string userId)
         {
             var result = await GetUserNotificationsAsync(userId);
@@ -30,9 +29,7 @@ namespace KamPay.Services
             WeakReferenceMessenger.Default.Send(new UnreadGeneralNotificationStatusMessage(hasUnread));
         }
 
-        /// <summary>
-        /// Yeni bir bildirim oluþturur ve Firebase'e kaydeder.
-        /// </summary>
+        // Yeni bir bildirim oluþturur ve Firebase'e kaydeder.
         public async Task<ServiceResult<bool>> CreateNotificationAsync(Notification notification)
         {
             try
@@ -47,7 +44,6 @@ namespace KamPay.Services
                     .Child(notification.NotificationId)
                     .PutAsync(notification);
 
-                // YENÝ EKLENDÝ: Yeni bildirim geldiðinde rozeti göster
               //  WeakReferenceMessenger.Default.Send(new UnreadGeneralNotificationStatusMessage(true));
 
 
@@ -59,9 +55,7 @@ namespace KamPay.Services
             }
         }
 
-        /// <summary>
         /// Belirli bir kullanýcýnýn tüm bildirimlerini getirir.
-        /// </summary>
         public async Task<ServiceResult<List<Notification>>> GetUserNotificationsAsync(string userId)
         {
             try
@@ -85,9 +79,7 @@ namespace KamPay.Services
             }
         }
 
-        /// <summary>
         /// Belirli bir bildirimi okundu olarak iþaretler.
-        /// </summary>
         public async Task<ServiceResult<bool>> MarkAsReadAsync(string notificationId)
         {
             try

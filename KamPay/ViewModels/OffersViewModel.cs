@@ -74,7 +74,6 @@ namespace KamPay.ViewModels
             IsLoading = false;
         }
 
-        // 🔹 GÜNCELLENDİ: FirebaseEvent<T> tipi kullanılıyor
         private void UpdateCollection(ObservableCollection<Transaction> collection, FirebaseEvent<Transaction> e)
         {
             if (e.Object == null) return;

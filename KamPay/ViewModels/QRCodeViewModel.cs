@@ -35,7 +35,6 @@ namespace KamPay.ViewModels
             _authService = authService;
         }
 
-        // ✅ Tek parametreli versiyon — MVVMTK0007 hatası artık olmaz
         [RelayCommand]
         private async Task GenerateQRCodeAsync(string productId)
         {

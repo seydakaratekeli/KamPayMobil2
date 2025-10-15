@@ -9,7 +9,7 @@ using KamPay.Models;
 
 namespace KamPay.Models
 {
-    // ===== SÜRPRÝZ BAÐIÞ KUTUSU =====
+ 
     public class SurpriseBox
     {
         public string BoxId { get; set; }

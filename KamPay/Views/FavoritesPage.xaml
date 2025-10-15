@@ -7,7 +7,6 @@
              Title="Favoriler"
              Shell.BackgroundColor="{StaticResource Primary}">
 
-    <!-- 🔹 Üst seviye kapsayıcı Grid -->
     <Grid>
 
         <!-- Asıl içerik -->

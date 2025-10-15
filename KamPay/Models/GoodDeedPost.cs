@@ -10,7 +10,6 @@ using KamPay.Models;
 namespace KamPay.Models;
 
 
-// ===== ÝYÝLÝK PANOSU =====
 public class GoodDeedPost
 {
     public string PostId { get; set; }

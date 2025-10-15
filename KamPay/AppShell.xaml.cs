@@ -1,14 +1,14 @@
 ﻿using KamPay.Views;
-using KamPay.ViewModels; // Yeni eklediğimiz ViewModel için
+using KamPay.ViewModels; 
 
 namespace KamPay
 {
     public partial class AppShell : Shell
     {
-        public AppShell(AppShellViewModel vm) // Constructor'a ViewModel'i enjekte et
+        public AppShell(AppShellViewModel vm) 
         {
             InitializeComponent();
-            BindingContext = vm; // Shell'in BindingContext'ini ayarla
+            BindingContext = vm; 
 
             // Rota Kayıtları: Sekmelerde olmayan ama gidilecek sayfalar
             Routing.RegisterRoute(nameof(RegisterPage), typeof(RegisterPage));
@@ -17,7 +17,6 @@ namespace KamPay
             Routing.RegisterRoute(nameof(ProductDetailPage), typeof(ProductDetailPage));
             Routing.RegisterRoute(nameof(ChatPage), typeof(ChatPage));
             Routing.RegisterRoute(nameof(NotificationsPage), typeof(NotificationsPage));
-            // Mevcut Routing.RegisterRoute'ların altına ekle
             Routing.RegisterRoute(nameof(OffersPage), typeof(OffersPage));
             Routing.RegisterRoute(nameof(TradeOfferView), typeof(TradeOfferView));
         }

@@ -5,7 +5,6 @@ using KamPay.Services;
 
 namespace KamPay.ViewModels
 {
-    // ===== SÜRPRİZ KUTU ViewModel =====
     public partial class SurpriseBoxViewModel : ObservableObject
     {
         private readonly ISurpriseBoxService _surpriseBoxService;

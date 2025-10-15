@@ -12,7 +12,7 @@ namespace KamPay.Services
     public class FirebaseFavoriteService : IFavoriteService
     {
         private readonly FirebaseClient _firebaseClient;
-       //  Bildirim servisini kullanabilmek için ekliyoruz.
+    
 
         private readonly INotificationService _notificationService;
 
@@ -20,7 +20,7 @@ namespace KamPay.Services
         public FirebaseFavoriteService(INotificationService notificationService)
         {
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
-            _notificationService = notificationService; // Gelen servisi kendi deðiþkenimize atýyoruz.
+            _notificationService = notificationService; 
         }
 
         public async Task<ServiceResult<Favorite>> AddToFavoritesAsync(string userId, string productId)

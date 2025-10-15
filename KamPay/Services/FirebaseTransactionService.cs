@@ -13,7 +13,7 @@ namespace KamPay.Services
     public class FirebaseTransactionService : ITransactionService
     {
         private readonly FirebaseClient _firebaseClient;
-        private readonly INotificationService _notificationService; // BÝLDÝRÝM SERVÝSÝ
+        private readonly INotificationService _notificationService; 
         private readonly IProductService _productService;
 
         public FirebaseTransactionService(INotificationService notificationService, IProductService productService)
@@ -193,7 +193,7 @@ namespace KamPay.Services
                     // 1. Talep edilen ürünü rezerve et
                     await _productService.MarkAsReservedAsync(transaction.ProductId, true);
 
-                    // 2. EÐER BU BÝR TAKAS ÝSE, teklif edilen ürünü de rezerve et (YENÝ EKLENEN KISIM)
+                    // 2. EÐER BU BÝR TAKAS ÝSE, teklif edilen ürünü de rezerve et
                     if (transaction.Type == ProductType.Takas && !string.IsNullOrEmpty(transaction.OfferedProductId))
                     {
                         await _productService.MarkAsReservedAsync(transaction.OfferedProductId, true);

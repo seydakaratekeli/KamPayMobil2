@@ -1,10 +1,9 @@
-using CommunityToolkit.Mvvm.Messaging; // EKLENDÝ
+using CommunityToolkit.Mvvm.Messaging; 
 using KamPay.ViewModels;
 using KamPay.Models;
 
 namespace KamPay.Views;
 
-// YENÝ EKLENDÝ: ViewModel'den gelecek mesajý tanýmlayan sýnýf
 public class ScrollToChatMessage
 {
     public Message Message { get; }
@@ -13,17 +12,14 @@ public class ScrollToChatMessage
 
 public partial class ChatPage : ContentPage
 {
-    // Artýk _vm deðiþkenine ihtiyaç kalmadý.
-    // private readonly ChatViewModel _vm;
+   
 
     public ChatPage(ChatViewModel vm)
     {
         InitializeComponent();
         BindingContext = vm;
-        // _vm = vm; // KALDIRILDI
     }
 
-    // GÜNCELLENDÝ: Sayfa göründüðünde mesaj dinleyicisini baþlat
     protected override async void OnAppearing()
     {
         base.OnAppearing();
@@ -42,7 +38,7 @@ public partial class ChatPage : ContentPage
         }
     }
 
-    // GÜNCELLENDÝ: Sayfa kaybolduðunda mesaj dinleyicisini durdur
+    // Sayfa kaybolduðunda mesaj dinleyicisini durdur
     protected override void OnDisappearing()
     {
         base.OnDisappearing();

@@ -12,7 +12,6 @@ using KamPay.Views;
 namespace KamPay.ViewModels
 {
 
-    // Chat (Sohbet) ViewModel
     [QueryProperty(nameof(ConversationId), "conversationId")]
 
     public partial class ChatViewModel : ObservableObject

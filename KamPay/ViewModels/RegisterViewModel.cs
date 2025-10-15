@@ -110,10 +110,7 @@ namespace KamPay.ViewModels
                     ShowVerificationSection = false;
                     await Application.Current.MainPage.DisplayAlert("Doðrulandý", result.Message ?? "E-posta doðrulandý.", "Tamam");
                     
-                    // Kaydolan kullanýcýyý giriþ sayfasýna yönlendir
-                    //  await Shell.Current.GoToAsync("//LoginPage");
-
-                    // =====  OTOMATÝK GÝRÝÞ YAP VE YÖNLENDÝR =====
+                
                     // Doðrulama baþarýlý olduðu için artýk kullanýcýyý otomatik olarak içeri alabiliriz.
                     var loginRequest = new LoginRequest { Email = Email, Password = Password, RememberMe = true };
                     var loginResult = await _authService.LoginAsync(loginRequest);
@@ -189,13 +186,11 @@ namespace KamPay.ViewModels
         [RelayCommand]
         private async Task CancelVerificationAsync()
         {
-            // Doðrulama iþlemini iptal et -> kullanýcýyý login sayfasýna götürebiliriz ya da ShowVerificationSection = false
             ShowVerificationSection = false;
             VerificationCode = string.Empty;
             await Task.CompletedTask;
         }
 
-        // RegisterViewModel.cs içinde
         [RelayCommand]
         private async Task GoToLoginAsync()
         {

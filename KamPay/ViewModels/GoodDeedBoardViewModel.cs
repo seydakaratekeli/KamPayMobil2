@@ -6,7 +6,6 @@ using KamPay.Services;
 
 namespace KamPay.ViewModels;
 
-// ===== ÝYÝLÝK PANOSU ViewModel =====
 public partial class GoodDeedBoardViewModel : ObservableObject
 {
     private readonly IGoodDeedService _goodDeedService;

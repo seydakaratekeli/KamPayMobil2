@@ -10,7 +10,6 @@ using KamPay.Services;
 using KamPay.Views;
 namespace KamPay.ViewModels;
 
-// Profil ViewModel
 public partial class ProfileViewModel : ObservableObject
 {
     private readonly IAuthenticationService _authService;

@@ -213,12 +213,11 @@ public class FirebaseProductService : IProductService
             {
                 foreach (var imageUrl in product.ImageUrls)
                 {
-                    // StorageService'deki düzeltilmiþ DeleteImageAsync metodunu kullanacak
                     await _storageService.DeleteImageAsync(imageUrl);
                 }
             }
 
-            // ===== YENÝ EKLENEN ADIM: ÝLÝÞKÝLÝ FAVORÝLERÝ SÝLME =====
+            //  ÝLÝÞKÝLÝ FAVORÝLERÝ SÝLME 
             // Bu ürüne ait tüm favori kayýtlarýný bul
             var allFavorites = await _firebaseClient
                 .Child(Constants.FavoritesCollection)

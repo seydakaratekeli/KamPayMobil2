@@ -8,12 +8,10 @@ using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 
-// HATA ÇÖZÜMÜ: ICommunityToolkitPopupService'i ve ilgili using ifadesini tamamen kaldýrýyoruz.
 using CommunityToolkit.Maui.Core; 
 
 namespace KamPay.ViewModels
 {
-    // HATA ÇÖZÜMÜ: Eksik olan mesaj sýnýfýný buraya, namespace'in içine ama ana sýnýfýn dýþýna ekliyoruz.
     public class ShowTradeOfferPopupMessage
     {
         public Product TargetProduct { get; }
@@ -55,21 +53,18 @@ namespace KamPay.ViewModels
 
         public ObservableCollection<string> ProductImages { get; } = new();
 
-        // CONSTRUCTOR GÜNCELLENDÝ: ITransactionService ve ICommunityToolkitPopupService eklendi
         public ProductDetailViewModel(
             IProductService productService,
             IAuthenticationService authService,
             IFavoriteService favoriteService,
             IMessagingService messagingService,
             ITransactionService transactionService)
-           // ICommunityToolkitPopupService popupService) // Pop-up servisini ekledik
         {
             _productService = productService;
             _authService = authService;
             _favoriteService = favoriteService;
             _messagingService = messagingService;
             _transactionService = transactionService;
-         //   _popupService = popupService; // Servisi deðiþkene atadýk
         }
 
         partial void OnProductIdChanged(string value)
@@ -160,7 +155,6 @@ namespace KamPay.ViewModels
             }
         }
 
-        // KamPay/ViewModels/ProductDetailViewModel.cs
 
         [RelayCommand]
         private async Task SendRequestAsync()
@@ -179,8 +173,7 @@ namespace KamPay.ViewModels
                 switch (Product.Type)
                 {
                     case ProductType.Takas:
-                        // Arayüze "Pop-up göster" mesajý gönderiyoruz.
-                        // View bu mesajý yakalayýp popup'ý gösterecek.
+                        
                         WeakReferenceMessenger.Default.Send(new ShowTradeOfferPopupMessage(Product));
                         break;
 

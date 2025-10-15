@@ -1,5 +1,5 @@
 using KamPay.ViewModels;
-using Microsoft.Maui.Controls; // Gerekli namespace eklenmeli
+using Microsoft.Maui.Controls; 
 
 namespace KamPay.Views;
 

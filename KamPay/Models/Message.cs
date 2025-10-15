@@ -28,8 +28,9 @@ namespace KamPay.Models
         public string ProductTitle { get; set; }
         public string ProductThumbnail { get; set; }
         public string TimeText => SentAt.ToString("HH:mm");
-        // YENÝ EKLENEN ÖZELLÝK (Veritabanýna kaydedilmeyecek, sadece UI için)
-        [JsonIgnore] // Firebase.Database.Ignore yerine doðru olan JsonIgnore kullanýldý.
+
+        // (Veritabanýna kaydedilmeyecek, sadece UI için)
+        [JsonIgnore] 
         public bool IsSentByMe { get; set; }
 
     }

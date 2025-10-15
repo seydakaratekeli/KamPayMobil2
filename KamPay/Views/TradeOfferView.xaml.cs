@@ -9,6 +9,7 @@ public partial class TradeOfferView : Popup
     {
         InitializeComponent();
         BindingContext = vm;
+
         // Pop-up'ýn sonucunu ViewModel'e bildirmek için
      //   vm.ClosePopupAction = async () => await CloseAsync();
     }

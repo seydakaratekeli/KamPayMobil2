@@ -1,7 +1,6 @@
 using KamPay.Models;
 
 namespace KamPay.Services;
-// ===== ÝYÝLÝK PANOSU SERVÝSÝ =====
 public interface IGoodDeedService
 {
     Task<ServiceResult<GoodDeedPost>> CreatePostAsync(GoodDeedPost post);

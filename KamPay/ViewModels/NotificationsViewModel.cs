@@ -1,4 +1,3 @@
-// KamPay/ViewModels/NotificationsViewModel.cs
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -32,7 +31,6 @@ namespace KamPay.ViewModels
             _notificationService = notificationService;
             _authService = authService;
 
-            // ViewModel oluþturulduðunda bildirimleri yükle
             _ = LoadNotificationsAsync();
         }
 
@@ -94,10 +92,7 @@ namespace KamPay.ViewModels
                     notification.IsRead = true;
                 }
 
-                // ===== DÜZELTME: Karmaþýk yapý yerine doðrudan ActionUrl'e git =====
-                // ActionUrl zaten "ProductDetailPage?productId=123" gibi hazýr bir adres içeriyor.
                 await Shell.Current.GoToAsync(notification.ActionUrl);
-                // =====================================================================
             }
             catch (Exception ex)
             {
@@ -135,7 +130,6 @@ namespace KamPay.ViewModels
             // Bildirimi okundu olarak iþaretle
             await MarkAsReadAsync(notification);
 
-            // Ýlgili sayfaya git (örn: productdetail?productId=123)
             await Shell.Current.GoToAsync(notification.ActionUrl);
         }
     }

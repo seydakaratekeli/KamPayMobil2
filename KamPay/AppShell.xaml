@@ -10,7 +10,6 @@
 
     <Shell.Resources>
         <ResourceDictionary>
-            <!-- Converter'ı burada tanımlıyoruz -->
             <converters:UnreadToIconConverter x:Key="UnreadToIconConverter" />
 
             <Style TargetType="TabBar">

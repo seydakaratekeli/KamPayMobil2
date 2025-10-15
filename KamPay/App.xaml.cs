@@ -1,19 +1,15 @@
 ﻿using KamPay.Views;
-using KamPay.ViewModels; // Yeni eklediğimiz ViewModel için
+using KamPay.ViewModels; 
 namespace KamPay
 {
     public partial class App : Application
     {
-        // Constructor'a AppShell'i enjekte ediyoruz
         public App(AppShell appShell)
         {
             InitializeComponent();
 
-            // Artık 'new AppShell()' yerine doğrudan enjekte edilen MainPage'i kullanıyoruz
             MainPage = appShell;
 
-            // Başlangıç yönlendirmesi burada kalabilir veya AppShell'in OnAppearing metoduna taşınabilir.
-            // Şimdilik burada bırakmak sorun değil.
            Shell.Current.GoToAsync("//LoginPage");
 
         }

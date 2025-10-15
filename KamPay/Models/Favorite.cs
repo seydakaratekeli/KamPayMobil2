@@ -14,14 +14,13 @@ public class Favorite
     public decimal ProductPrice { get; set; }
     public ProductType ProductType { get; set; }
 
-    // YENİ EKLENECEK YARDIMCI ÖZELLİK 1
+  
     public string PriceText => ProductType == ProductType.Satis
         ? $"{ProductPrice:N2} ₺"
         : ProductType == ProductType.Bagis
             ? "Ücretsiz"
             : "Takas";
 
-    // YENİ EKLENECEK YARDIMCI ÖZELLİK 2
     public string TimeAgoText
     {
         get

@@ -1,11 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
-using KamPay.Services; // EKLENDÝ
-using KamPay.Helpers; // EKLENDÝ
-using Firebase.Database; // EKLENDÝ
-using Firebase.Database.Query; // EKLENDÝ
-using System.Reactive.Linq; // EKLENDÝ
-using KamPay.Models; // EKLENEN SATIR
+using KamPay.Services; 
+using KamPay.Helpers; 
+using Firebase.Database;
+using Firebase.Database.Query; 
+using System.Reactive.Linq; 
+using KamPay.Models; 
 
 
 namespace KamPay.ViewModels
@@ -27,7 +27,7 @@ namespace KamPay.ViewModels
             _authService = authService;
             _messagingService = messagingService;
 
-            // Genel bildirimleri dinle (ÝSMÝ DEÐÝÞTÝ)
+            // Genel bildirimleri dinle 
             WeakReferenceMessenger.Default.Register<UnreadGeneralNotificationStatusMessage>(this, (r, m) =>
             {
                 HasUnreadNotifications = m.Value;
@@ -53,7 +53,6 @@ namespace KamPay.ViewModels
                 }
             });
         }
-        // ===== YENÝ METOTLAR EKLENDÝ =====
         private async void StartListeningForMessages()
         {
             StopListeningForMessages(); // Önceki dinleyiciyi durdur
@@ -97,18 +96,15 @@ namespace KamPay.ViewModels
         }
     }
 
-        // BU SINIFIN ÝSMÝ DEÐÝÞTÝRÝLDÝ
         public class UnreadGeneralNotificationStatusMessage : CommunityToolkit.Mvvm.Messaging.Messages.ValueChangedMessage<bool>
     {
         public UnreadGeneralNotificationStatusMessage(bool value) : base(value) { }
     }
 
-    // Bu sýnýf ayný kalýyor
     public class UnreadMessageStatusMessage : CommunityToolkit.Mvvm.Messaging.Messages.ValueChangedMessage<bool>
     {
         public UnreadMessageStatusMessage(bool value) : base(value) { }
     }
-    // ===== BU YENÝ MESAJ SINIFINI EKLEYÝN (AYNI DOSYANIN ALTINA) =====
     public class UserSessionChangedMessage : CommunityToolkit.Mvvm.Messaging.Messages.ValueChangedMessage<bool>
     {
         public UserSessionChangedMessage(bool isLoggedIn) : base(isLoggedIn) { }

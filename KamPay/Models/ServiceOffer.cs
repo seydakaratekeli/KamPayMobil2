@@ -1,6 +1,6 @@
 namespace KamPay.Models;
 
-// ===== HÝZMET PAYLAÞIMI (ZAMAN BANKASI) =====
+
 public class ServiceOffer
 {
     public string ServiceId { get; set; }

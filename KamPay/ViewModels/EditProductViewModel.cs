@@ -67,10 +67,8 @@ namespace KamPay.ViewModels
                 ExchangePreference = product.ExchangePreference;
 
                
-// Ürün tipine göre ilgili alanlarýn görünürlüðünü burada AÇIKÇA ayarlýyoruz.
   ShowPriceField = product.Type == ProductType.Satis;
   ShowExchangeField = product.Type == ProductType.Takas;
-  // ===================================
 
 
 ImagePaths.Clear();
@@ -86,7 +84,6 @@ ErrorMessage = "Düzenlenecek ürün yüklenemedi.";
 IsLoading = false;
 }
 
-// AddProductViewModel'deki partial OnSelectedTypeChanged metodu buraya gelecek
 partial void OnSelectedTypeChanged(ProductType value)
 {
 ShowPriceField = value == ProductType.Satis;
@@ -141,13 +138,11 @@ private async Task CancelAsync()
 await Shell.Current.GoToAsync("..");
 }
 
-// AddProductViewModel'deki PickImagesAsync ve RemoveImage komutlarý da buraya eklenebilir.
 [RelayCommand]
 private async Task PickImagesAsync()
 {
 try
 {
-// MAUI Media Picker kullanarak fotoðraf seç
 var photos = await MediaPicker.PickPhotoAsync(new MediaPickerOptions
 {
     Title = "Ürün Görseli Seçin"

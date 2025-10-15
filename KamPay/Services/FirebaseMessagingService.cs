@@ -7,8 +7,8 @@ using Firebase.Database.Query;
 using KamPay.Helpers;
 using KamPay.Models;
 using KamPay.Views;
-using CommunityToolkit.Mvvm.Messaging; // Eklendi
-using KamPay.ViewModels; // Eklendi
+using CommunityToolkit.Mvvm.Messaging; 
+using KamPay.ViewModels; 
 
 namespace KamPay.Services
 {
@@ -16,17 +16,14 @@ namespace KamPay.Services
     public class FirebaseMessagingService : IMessagingService
     {
         private readonly FirebaseClient _firebaseClient;
-        //  Bildirim servisini kullanmak için
         private readonly INotificationService _notificationService;
 
-        //  Artık INotificationService'i de alıyor
         public FirebaseMessagingService(INotificationService notificationService)
         {
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
             _notificationService = notificationService;
         }
 
-        // Bu yeni metodu ekleyin
         private async Task CheckAndBroadcastUnreadMessageStatus(string userId)
         {
             var result = await GetTotalUnreadMessageCountAsync(userId);
@@ -34,7 +31,6 @@ namespace KamPay.Services
             WeakReferenceMessenger.Default.Send(new UnreadMessageStatusMessage(hasUnread));
         }
 
-        // ===== BU METOT TAMAMEN GÜNCELLENDİ =====
         public async Task<ServiceResult<Message>> SendMessageAsync(SendMessageRequest request, User sender)
         {
             try
@@ -52,7 +48,7 @@ namespace KamPay.Services
                     return ServiceResult<Message>.FailureResult("Konuşma oluşturulamadı veya bulunamadı.");
                 }
                 var conversation = conversationResult.Data;
-                // ===== YENİ EKLENDİ: Alıcı bilgilerini çekme =====
+                // Alıcı bilgilerini çekme 
                 var receiver = await _firebaseClient
                     .Child(Constants.UsersCollection)
                     .Child(request.ReceiverId)
@@ -73,10 +69,10 @@ namespace KamPay.Services
                     Content = request.Content,
                     Type = request.Type,
                     ProductId = request.ProductId,
-                    // ===== YENİ EKLENDİ: Alıcı bilgilerini atama =====
+
+                    // Alıcı bilgilerini atama 
                     ReceiverName = receiver.FullName,
                     ReceiverPhotoUrl = receiver.ProfileImageUrl,
-                    // ============================================
 
                  
 
@@ -279,7 +275,8 @@ namespace KamPay.Services
                     .Child(Constants.ConversationsCollection)
                     .Child(conversationId)
                     .OnceSingleAsync<Conversation>();
-                // YENİ: Diğer konuşmalarda hala okunmamış mesaj var mı diye kontrol et
+
+                //  Diğer konuşmalarda hala okunmamış mesaj var mı diye kontrol et
                 await CheckAndBroadcastUnreadMessageStatus(readerUserId);
 
                 if (conversation == null) return ServiceResult<bool>.FailureResult("Konuşma bulunamadı.");

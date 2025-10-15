@@ -10,8 +10,7 @@ public class FirebaseStorageService : IStorageService
 
     public FirebaseStorageService()
     {
-        // Firebase Storage bucket URL'inizi buraya yazın
-        // Örnek: your-app.appspot.com
+        // Firebase Storage bucket URL
         _storage = new FirebaseStorage("kampay-b006d.firebasestorage.app");
     }
 
@@ -49,15 +48,7 @@ public class FirebaseStorageService : IStorageService
                 .Child(productId)
                 .Child(fileName)
                 .PutAsync(stream);
-            //FirebaseStorage.Net 1.0.3 sürümünde BytesTransferred ve TotalBytes henüz tanımlı değil
-            // İlerleme takibi (isteğe bağlı)
-            /*  task.Progress.ProgressChanged += (s, e) =>
-              {
-                  var progress = (e.BytesTransferred * 100.0) / e.TotalBytes;
-                  System.Diagnostics.Debug.WriteLine($"[Upload Progress] {progress:F2}%");
-              };
-            */
-
+      
             // URL'i al
             var downloadUrl = await task;
 
@@ -125,17 +116,6 @@ public class FirebaseStorageService : IStorageService
                 return ServiceResult<bool>.FailureResult("Geçersiz URL");
             }
 
-            /*  // Firebase Storage URL'den path'i çıkar
-              var uri = new Uri(imageUrl);
-              var path = uri.AbsolutePath;
-
-              // Sil
-              await _storage
-                  .Child(path)
-                  .DeleteAsync();
-
-              return ServiceResult<bool>.SuccessResult(true, "Görsel silindi");
-          */
             // 1️⃣ URI nesnesine çevir
             var uri = new Uri(imageUrl);
 

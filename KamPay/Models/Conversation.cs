@@ -34,7 +34,7 @@ namespace KamPay.Models
         public string OtherUserPhotoUrl { get; set; }
         public int UnreadCount { get; set; }
 
-        // ===== YENÝ EKLENEN YARDIMCI METOTLAR =====
+       
         public string GetOtherUserId(string currentUserId)
         {
             return User1Id == currentUserId ? User2Id : User1Id;
@@ -53,7 +53,7 @@ namespace KamPay.Models
         {
             return currentUserId == User1Id ? UnreadCountUser1 : UnreadCountUser2;
         }
-        // ===== HATA VEREN EKSÝK ÖZELLÝK (YENÝ EKLENDÝ) =====
+       
         public string LastMessageTimeText
         {
             get

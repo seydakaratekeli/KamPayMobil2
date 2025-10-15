@@ -9,7 +9,6 @@ using KamPay.Services;
 
 namespace KamPay.ViewModels
 {
-    // ===== HİZMET PAYLAŞIMI ViewModel =====
     public partial class ServiceSharingViewModel : ObservableObject
     {
         private readonly IServiceSharingService _serviceService;

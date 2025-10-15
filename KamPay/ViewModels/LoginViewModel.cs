@@ -67,11 +67,10 @@ namespace KamPay.ViewModels
             }
         }
 
-      // LoginViewModel.cs içinde
 [RelayCommand]
 private async Task GoToRegisterAsync()
 {
-    // Yýðýný sýfýrlama, sadece üzerine ekle
+    // Yýðýný sýfýrlama
     await Shell.Current.GoToAsync(nameof(RegisterPage)); 
 }
     }

@@ -1,5 +1,5 @@
 ﻿using System.Globalization;
-using Microsoft.Maui.Controls; // BU SATIRIN EKLİ OLDUĞUNDAN EMİN OL!
+using Microsoft.Maui.Controls; 
 
 namespace KamPay.Converters
 {

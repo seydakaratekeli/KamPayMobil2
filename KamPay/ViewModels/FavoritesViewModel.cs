@@ -14,7 +14,6 @@ using System.Reactive.Linq;
 
 namespace KamPay.ViewModels
 {
-    // Favoriler ViewModel
     public partial class FavoritesViewModel : ObservableObject, IDisposable
     {
         private readonly IFavoriteService _favoriteService;

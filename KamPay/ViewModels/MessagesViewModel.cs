@@ -15,7 +15,6 @@ using System.Reactive.Linq;
 
 namespace KamPay.ViewModels
 {
-    // Mesajlar Listesi ViewModel
     public partial class MessagesViewModel : ObservableObject, IDisposable
     {
         private readonly IMessagingService _messagingService;

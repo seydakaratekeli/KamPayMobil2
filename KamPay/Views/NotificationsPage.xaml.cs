@@ -1,4 +1,3 @@
-// KamPay/Views/NotificationsPage.xaml.cs
 using KamPay.ViewModels;
 
 namespace KamPay.Views
@@ -12,6 +11,11 @@ namespace KamPay.Views
         }
     }
 }
+
+
+
+
+
 /*
  * NewMessage (Yeni Mesaj):
 

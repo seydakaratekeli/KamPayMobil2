@@ -2,7 +2,6 @@ using KamPay.Models;
 
 namespace KamPay.Services;
 
-// ===== HÝZMET PAYLAÞIM SERVÝSÝ =====
 public interface IServiceSharingService
 {
     Task<ServiceResult<ServiceOffer>> CreateServiceOfferAsync(ServiceOffer offer);

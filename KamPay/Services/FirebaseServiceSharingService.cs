@@ -16,7 +16,7 @@ namespace KamPay.Services
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
         }
 
-        // === Hizmet oluþturma ===
+        // Hizmet oluþturma 
         public async Task<ServiceResult<ServiceOffer>> CreateServiceOfferAsync(ServiceOffer offer)
         {
             try

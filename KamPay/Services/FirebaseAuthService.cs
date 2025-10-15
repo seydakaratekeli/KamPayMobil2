@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Linq;
-using CommunityToolkit.Mvvm.Messaging; // Dosyanın başına ekleyin
- using KamPay.ViewModels; // Dosyanın başına ekleyin
+using CommunityToolkit.Mvvm.Messaging; 
+ using KamPay.ViewModels; 
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;

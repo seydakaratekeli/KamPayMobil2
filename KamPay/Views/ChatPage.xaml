@@ -5,7 +5,6 @@
              x:Class="KamPay.Views.ChatPage"
              Title="{Binding CurrentConversation.OtherUserName}">
 
-    <!-- 🔹 Üst seviye kapsayıcı Grid -->
     <Grid>
 
         <!-- Asıl içerik -->
