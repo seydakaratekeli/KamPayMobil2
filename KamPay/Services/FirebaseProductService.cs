@@ -366,7 +366,6 @@ public class FirebaseProductService : IProductService
             return ServiceResult<List<Product>>.FailureResult("Ürünler yüklenemedi", ex.Message);
         }
     }
-
     public async Task<ServiceResult<List<Product>>> GetUserProductsAsync(string userId)
     {
         try
@@ -377,19 +376,30 @@ public class FirebaseProductService : IProductService
                 .EqualTo(userId)
                 .OnceAsync<Product>();
 
+            // Ürün ID'lerini Firebase Key'lerinden alýp nesnelere ata
+            foreach (var product in allProducts)
+            {
+                product.Object.ProductId = product.Key;
+            }
+
+         
+
+            // Sadece aktif, satýlmamýþ VE rezerve edilmemiþ ürünleri filtrele
             var products = allProducts
                 .Select(p => p.Object)
+                .Where(p => p.IsActive && !p.IsSold && !p.IsReserved) // Filtreleme burada yapýlýyor
                 .OrderByDescending(p => p.CreatedAt)
                 .ToList();
+
+        
 
             return ServiceResult<List<Product>>.SuccessResult(products);
         }
         catch (Exception ex)
         {
-            return ServiceResult<List<Product>>.FailureResult("Ürünler yüklenemedi", ex.Message);
+            return ServiceResult<List<Product>>.FailureResult("Kullanýcýnýn ürünleri alýnamadý.", ex.Message);
         }
     }
-
     public async Task<ServiceResult<bool>> MarkAsSoldAsync(string productId)
     {
         try

@@ -73,24 +73,41 @@
                             <Frame.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=ProductTappedCommand}" CommandParameter="{Binding .}" />
                             </Frame.GestureRecognizers>
-                            <Grid ColumnDefinitions="120, *" ColumnSpacing="10">
-                                <Image Grid.Column="0" Source="{Binding ThumbnailUrl}" Aspect="AspectFill" HeightRequest="120" />
-                                <VerticalStackLayout Grid.Column="1" Spacing="5">
-                                    <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="16" />
-                                    <Label Text="{Binding PriceText}" TextColor="{StaticResource Primary}" FontAttributes="Bold" />
-                                    <Label Text="{Binding UserName}" FontSize="12" TextColor="{StaticResource Gray}" />
-                                    <HorizontalStackLayout Spacing="5" Margin="0,5,0,0">
-                                        <Label Text="❤️" />
-                                        <Label Text="{Binding FavoriteCount}" />
-                                        <Label Text="👁️" Margin="10,0,0,0" />
-                                        <Label Text="{Binding ViewCount}" />
-                                    </HorizontalStackLayout>
-                                </VerticalStackLayout>
+
+                            <Grid>
+                                <Grid ColumnDefinitions="120, *" ColumnSpacing="10">
+                                    <Image Grid.Column="0" Source="{Binding ThumbnailUrl}" Aspect="AspectFill" HeightRequest="120" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="5">
+                                        <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="16" />
+                                        <Label Text="{Binding PriceText}" TextColor="{StaticResource Primary}" FontAttributes="Bold" />
+                                        <Label Text="{Binding UserName}" FontSize="12" TextColor="{StaticResource Gray}" />
+                                        <HorizontalStackLayout Spacing="5" Margin="0,5,0,0">
+                                            <Label Text="❤️" />
+                                            <Label Text="{Binding FavoriteCount}" />
+                                            <Label Text="👁️" Margin="10,0,0,0" />
+                                            <Label Text="{Binding ViewCount}" />
+                                        </HorizontalStackLayout>
+                                    </VerticalStackLayout>
+                                </Grid>
+
+                                <Border IsVisible="{Binding IsReserved}"
+                        BackgroundColor="#99FF9800" Padding="10,5"
+                        HorizontalOptions="Start"
+                        VerticalOptions="Start"
+                        StrokeThickness="0">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="0,0,15,0" />
+                                    </Border.StrokeShape>
+                                    <Label Text="REZERVE EDİLDİ"
+                           TextColor="White"
+                           FontSize="10"
+                           FontAttributes="Bold"/>
+                                </Border>
                             </Grid>
                         </Frame>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
-
+                
                 <CollectionView.EmptyView>
                     <StackLayout Padding="20" VerticalOptions="Center" HorizontalOptions="Center">
                         <Label Text="{Binding EmptyMessage}" HorizontalTextAlignment="Center" />

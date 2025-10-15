@@ -4,7 +4,7 @@ using KamPay.Services;
 using KamPay.ViewModels;
 using KamPay.Views;
 using ZXing.Net.Maui;
-using ZXing.Net.Maui.Controls; // Ekle: ZXing.Net.Maui.Controls namespace'i
+using ZXing.Net.Maui.Controls; 
 using CommunityToolkit.Maui.Core; // Pop-up için gerekli
 
 namespace KamPay
@@ -17,7 +17,7 @@ namespace KamPay
 
             builder
                 .UseMauiApp<App>()
-                // ZXing.Net.Maui entegrasyonu için aşağıdaki satırı ekleyin:
+            
                 .UseBarcodeReader() // Doğru extension metodu
                 .UseMauiCommunityToolkit()
                 .ConfigureFonts(fonts =>
@@ -66,8 +66,11 @@ namespace KamPay
             builder.Services.AddSingleton<IGoodDeedService, FirebaseGoodDeedService>();
             builder.Services.AddSingleton<IServiceSharingService, FirebaseServiceSharingService>();
             builder.Services.AddSingleton<INotificationService, FirebaseNotificationService>();
-            builder.Services.AddSingleton<ITransactionService, FirebaseTransactionService>();
-
+            builder.Services.AddSingleton<ITransactionService>(sp =>
+                new FirebaseTransactionService(
+                    sp.GetRequiredService<INotificationService>(),
+                    sp.GetRequiredService<IProductService>()) // IProductService'i ekliyoruz
+            );
 
             // ViewModels
             // builder.Services.AddSingleton<AppShellViewModel>(); // Singleton olarak ekliyoruz

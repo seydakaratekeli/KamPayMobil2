@@ -13,13 +13,14 @@ namespace KamPay.Services
     public class FirebaseTransactionService : ITransactionService
     {
         private readonly FirebaseClient _firebaseClient;
-        private readonly INotificationService _notificationService; // BÝLDÝRÝM SERVÝSÝNÝ EKLE
+        private readonly INotificationService _notificationService; // BÝLDÝRÝM SERVÝSÝ
+        private readonly IProductService _productService;
 
-        public FirebaseTransactionService(INotificationService notificationService)
+        public FirebaseTransactionService(INotificationService notificationService, IProductService productService)
         {
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
             _notificationService = notificationService;
-
+            _productService = productService;
         }
 
         public async Task<ServiceResult<Transaction>> CreateRequestAsync(Product product, User buyer)
@@ -44,10 +45,10 @@ namespace KamPay.Services
                     .Child(transaction.TransactionId)
                     .PutAsync(transaction);
 
-                // CreateRequestAsync metodunun sonuna ekle
+                // Satýcýya bildirim gönder
                 await _notificationService.CreateNotificationAsync(new Notification
                 {
-                    UserId = product.UserId, // Satýcýya bildirim
+                    UserId = product.UserId,
                     Type = NotificationType.NewOffer,
                     Title = "Yeni Bir Teklifin Var!",
                     Message = $"{buyer.FullName}, '{product.Title}' ürünün için bir istek gönderdi.",
@@ -98,10 +99,10 @@ namespace KamPay.Services
                     .Child(transaction.TransactionId)
                     .PutAsync(transaction);
 
-                // CreateTradeOfferAsync metodunun sonuna ekle
+                // Satýcýya bildirim gönder
                 await _notificationService.CreateNotificationAsync(new Notification
                 {
-                    UserId = product.UserId, // Satýcýya bildirim
+                    UserId = product.UserId,
                     Type = NotificationType.NewOffer,
                     Title = "Yeni Bir Takas Teklifin Var!",
                     Message = $"{buyer.FullName}, '{product.Title}' ürünün için '{offeredProduct.Title}' ürününü teklif etti.",
@@ -165,20 +166,40 @@ namespace KamPay.Services
                     return ServiceResult<Transaction>.FailureResult("Ýþlem bulunamadý.");
                 }
 
+                // Eðer iþlem zaten sonuçlandýysa tekrar iþlem yapmayý engelle
+                if (transaction.Status == TransactionStatus.Accepted || transaction.Status == TransactionStatus.Completed)
+                {
+                    return ServiceResult<Transaction>.SuccessResult(transaction, "Bu teklif zaten yanýtlanmýþ.");
+                }
+
                 transaction.Status = accept ? TransactionStatus.Accepted : TransactionStatus.Rejected;
                 transaction.UpdatedAt = DateTime.UtcNow;
 
                 await transactionNode.PutAsync(transaction);
 
-                // RespondToOfferAsync metodunun sonuna ekle
+                // Alýcýya bildirim gönder
                 await _notificationService.CreateNotificationAsync(new Notification
                 {
-                    UserId = transaction.BuyerId, // Alýcýya bildirim
+                    UserId = transaction.BuyerId,
                     Type = accept ? NotificationType.OfferAccepted : NotificationType.OfferRejected,
                     Title = accept ? "Teklifin Kabul Edildi!" : "Teklifin Reddedildi",
                     Message = $"'{transaction.SellerName}', '{transaction.ProductTitle}' ürünü için yaptýðýn teklifi {(accept ? "kabul etti." : "reddetti.")}",
                     ActionUrl = nameof(Views.OffersPage)
                 });
+
+                // Eðer teklif KABUL EDÝLDÝYSE...
+                if (accept)
+                {
+                    // 1. Talep edilen ürünü rezerve et
+                    await _productService.MarkAsReservedAsync(transaction.ProductId, true);
+
+                    // 2. EÐER BU BÝR TAKAS ÝSE, teklif edilen ürünü de rezerve et (YENÝ EKLENEN KISIM)
+                    if (transaction.Type == ProductType.Takas && !string.IsNullOrEmpty(transaction.OfferedProductId))
+                    {
+                        await _productService.MarkAsReservedAsync(transaction.OfferedProductId, true);
+                    }
+                }
+
                 return ServiceResult<Transaction>.SuccessResult(transaction, "Teklif yanýtlandý.");
             }
             catch (Exception ex)
@@ -187,4 +208,4 @@ namespace KamPay.Services
             }
         }
     }
-}
+    }
