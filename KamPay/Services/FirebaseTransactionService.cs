@@ -202,17 +202,18 @@ namespace KamPay.Services
                         await _productService.MarkAsReservedAsync(transaction.OfferedProductId, true);
                     }
 
-                    // 2. QR Kod Servisini çaðýrarak teslimat kodlarýný oluþtur
-                    var qrCodeService = new FirebaseQRCodeService();
+                    // 2. QR Kodlarý Oluþtur (DÜZELTÝLMÝÞ KISIM)
 
-                    // GÜNCELLEME: 'transactionId' parametresi eklendi.
-                    await qrCodeService.GenerateDeliveryQRCodeAsync(transaction.TransactionId, transaction.ProductId, transaction.ProductTitle, transaction.SellerId, transaction.BuyerId);
+                    // HATALI SATIRI SÝLÝYORUZ:
+                    // var qrCodeService = new FirebaseQRCodeService(); 
+
+                    // YERÝNE DOÐRU OLANI, YANÝ ENJEKTE EDÝLENÝ KULLANIYORUZ:
+                    await _qrCodeService.GenerateDeliveryQRCodeAsync(transaction.TransactionId, transaction.ProductId, transaction.ProductTitle, transaction.SellerId, transaction.BuyerId);
 
                     // Eðer takas ise, alýcýnýn ürünü için de QR kod oluþtur
                     if (transaction.Type == ProductType.Takas && !string.IsNullOrEmpty(transaction.OfferedProductId))
                     {
-                        // GÜNCELLEME: 'transactionId' parametresi eklendi.
-                        await qrCodeService.GenerateDeliveryQRCodeAsync(transaction.TransactionId, transaction.OfferedProductId, transaction.OfferedProductTitle, transaction.BuyerId, transaction.SellerId);
+                        await _qrCodeService.GenerateDeliveryQRCodeAsync(transaction.TransactionId, transaction.OfferedProductId, transaction.OfferedProductTitle, transaction.BuyerId, transaction.SellerId);
                     }
                 }
                 return ServiceResult<Transaction>.SuccessResult(transaction, "Teklif yanýtlandý.");
@@ -222,7 +223,6 @@ namespace KamPay.Services
                 return ServiceResult<Transaction>.FailureResult("Ýþlem sýrasýnda hata oluþtu.", ex.Message);
             }
         }
-
 
     }
 }

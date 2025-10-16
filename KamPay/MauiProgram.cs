@@ -70,7 +70,7 @@ namespace KamPay
             builder.Services.AddSingleton<INotificationService, FirebaseNotificationService>();
 
             builder.Services.AddSingleton<ITransactionService>(sp =>
-      new FirebaseTransactionService(
+           new FirebaseTransactionService(
           sp.GetRequiredService<INotificationService>(),
           sp.GetRequiredService<IProductService>(),
           sp.GetRequiredService<IQRCodeService>()) // IQRCodeService'i buraya ekleyin
