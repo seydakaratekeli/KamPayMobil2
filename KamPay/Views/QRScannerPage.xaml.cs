@@ -1,31 +1,54 @@
-using KamPay.ViewModels;
+using CommunityToolkit.Mvvm.Messaging;
+using KamPay.Models.Messages;
+using ZXing.Net.Maui;
 
 namespace KamPay.Views;
 
 public partial class QRScannerPage : ContentPage
 {
-    private readonly QRCodeViewModel _viewModel;
-
-    public QRScannerPage(QRCodeViewModel viewModel)
+    public QRScannerPage()
     {
         InitializeComponent();
-        _viewModel = viewModel;
-        // ViewModel'i doðrudan atamýyoruz çünkü bu sayfanýn kendi BindingContext'i olmayacak,
-        // sadece viewModel'deki bir metodu çaðýracak.
+        barcodeReader.Options = new BarcodeReaderOptions
+        {
+            Formats = BarcodeFormats.All,
+            AutoRotate = true,
+            Multiple = false
+        };
     }
 
-    private void BarcodesDetected(object sender, ZXing.Net.Maui.BarcodeDetectionEventArgs e)
+    // HATA DÜZELTMESÝ: Metodun adý XAML ile eþleþmesi için "BarcodesDetected" olarak deðiþtirildi.
+    private void BarcodesDetected(object sender, BarcodeDetectionEventArgs e)
     {
-        if (e.Results?.Any() ?? false)
+        MainThread.BeginInvokeOnMainThread(async () =>
         {
-            MainThread.BeginInvokeOnMainThread(async () =>
-            {
-                // Taramayý durdur
-                barcodeReader.IsDetecting = false;
+            // Tekrar tekrar taramayý önlemek için kamerayý durdur
+            barcodeReader.IsDetecting = false;
 
-                // ViewModel'deki metodu çaðýr ve sonucu iþle
-                await _viewModel.ProcessScannedQRCode(e.Results[0].Value);
-            });
-        }
+            if (e.Results.Any())
+            {
+                string qrCodeData = e.Results[0].Value;
+
+                // Taranan QR kod verisini içeren bir mesaj GÖNDER
+                WeakReferenceMessenger.Default.Send(new QRCodeScannedMessage(qrCodeData));
+            }
+
+            // Bir önceki sayfaya geri dön
+            await Shell.Current.GoToAsync("..");
+        });
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        // Sayfa açýldýðýnda taramayý baþlat
+        barcodeReader.IsDetecting = true;
+    }
+
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        // Sayfa kapandýðýnda taramayý durdur
+        barcodeReader.IsDetecting = false;
     }
 }

@@ -2,15 +2,17 @@
 using CommunityToolkit.Mvvm.Input;
 using Firebase.Database.Query;
 using KamPay.Models;
+using CommunityToolkit.Mvvm.Messaging;
 using KamPay.Services;
+using KamPay.Models.Messages;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace KamPay.ViewModels
 {
     [QueryProperty(nameof(TransactionId), "transactionId")]
-    public partial class QRCodeViewModel : ObservableObject
-    {
+    public partial class QRCodeViewModel : ObservableObject, IRecipient<QRCodeScannedMessage> 
+    { 
         private readonly IQRCodeService _qrCodeService;
         private readonly IAuthenticationService _authService;
         private readonly Firebase.Database.FirebaseClient _firebaseClient;
@@ -43,10 +45,17 @@ namespace KamPay.ViewModels
             _qrCodeService = qrCodeService;
             _authService = authService;
             _firebaseClient = new Firebase.Database.FirebaseClient(Helpers.Constants.FirebaseRealtimeDbUrl);
+
+            WeakReferenceMessenger.Default.Register<QRCodeScannedMessage>(this);
         }
 
-        // Önceki kodda çift tanım hatasına (CS0757) neden olan kısmı düzelttik.
-        // Artık sadece bu metot var.
+        // Bu metot, WeakReferenceMessenger tarafından bir mesaj geldiğinde OTOMATİK olarak çağrılır
+        public async void Receive(QRCodeScannedMessage message)
+        {
+            // Gelen mesajın içindeki QR kod verisini al ve işle
+            await ProcessScannedQRCode(message.Value);
+        }
+
         async partial void OnTransactionIdChanged(string value)
         {
             if (!string.IsNullOrEmpty(value))
@@ -54,6 +63,39 @@ namespace KamPay.ViewModels
                 await LoadTransactionAndQRCodesAsync();
             }
         }
+
+        // Bu metot artık doğru çalışacak
+        public async Task ProcessScannedQRCode(string qrCodeData)
+        {
+            IsLoading = true;
+            if (OtherUserDelivery == null || qrCodeData != OtherUserDelivery.QRCodeData)
+            {
+                await Application.Current.MainPage.DisplayAlert("Hata", "Geçersiz veya bu takasa ait olmayan bir QR kod okuttunuz.", "Tamam");
+                IsLoading = false;
+                return;
+            }
+
+            if (OtherUserDelivery.IsUsed)
+            {
+                await Application.Current.MainPage.DisplayAlert("Bilgi", "Bu ürünün teslimatı zaten onaylanmış.", "Tamam");
+                IsLoading = false;
+                return;
+            }
+
+            var result = await _qrCodeService.CompleteDeliveryAsync(OtherUserDelivery.QRCodeId);
+            if (result.Success)
+            {
+                await Application.Current.MainPage.DisplayAlert("Başarılı", $"'{OtherUserDelivery.ProductTitle}' ürününü teslim aldığınız onaylandı.", "Harika!");
+                // Durumu yenilemek için verileri tekrar yükle
+                await LoadTransactionAndQRCodesAsync();
+            }
+            else
+            {
+                await Application.Current.MainPage.DisplayAlert("Hata", result.Message, "Tamam");
+            }
+            IsLoading = false;
+        }
+
 
         private async Task LoadTransactionAndQRCodesAsync()
         {
@@ -109,36 +151,7 @@ namespace KamPay.ViewModels
             await Shell.Current.GoToAsync("qrscanner");
         }
 
-        public async Task ProcessScannedQRCode(string qrCodeData)
-        {
-            IsLoading = true;
-            if (OtherUserDelivery == null || qrCodeData != OtherUserDelivery.QRCodeData)
-            {
-                await Application.Current.MainPage.DisplayAlert("Hata", "Geçersiz veya bu takasa ait olmayan bir QR kod okuttunuz.", "Tamam");
-                IsLoading = false;
-                return;
-            }
-
-            if (OtherUserDelivery.IsUsed)
-            {
-                await Application.Current.MainPage.DisplayAlert("Bilgi", "Bu ürünün teslimatı zaten onaylanmış.", "Tamam");
-                IsLoading = false;
-                return;
-            }
-
-            var result = await _qrCodeService.CompleteDeliveryAsync(OtherUserDelivery.QRCodeId);
-            if (result.Success)
-            {
-                await Application.Current.MainPage.DisplayAlert("Başarılı", $"'{OtherUserDelivery.ProductTitle}' ürününü teslim aldığınız onaylandı.", "Harika!");
-                await LoadTransactionAndQRCodesAsync();
-            }
-            else
-            {
-                await Application.Current.MainPage.DisplayAlert("Hata", result.Message, "Tamam");
-            }
-            IsLoading = false;
-        }
-
+     
         private void UpdateUIState()
         {
             bool myDeliveryCompleted = MyDelivery?.IsUsed ?? false;
