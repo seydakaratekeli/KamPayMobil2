@@ -20,7 +20,7 @@ namespace KamPay.ViewModels
             TargetProduct = targetProduct;
         }
     }
-    [QueryProperty(nameof(ProductId), "productId")]
+    [QueryProperty(nameof(ProductId), "ProductId")]
     public partial class ProductDetailViewModel : ObservableObject
     {
         // Gerekli tüm servisleri tanýmlýyoruz

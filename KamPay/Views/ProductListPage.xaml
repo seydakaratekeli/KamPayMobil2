@@ -3,41 +3,28 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:KamPay.ViewModels"
              xmlns:models="clr-namespace:KamPay.Models"
+             xmlns:converters="clr-namespace:KamPay.Converters"
              x:Class="KamPay.Views.ProductListPage"
              Shell.NavBarIsVisible="False">
+
+    <ContentPage.Resources>
+        <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
+    </ContentPage.Resources>
 
     <Grid RowDefinitions="Auto, *">
 
         <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Padding="15,10" BackgroundColor="White">
-            <Label Text="KamPay"
-                   FontSize="24"
-                   FontAttributes="Bold"
-                   TextColor="{StaticResource Primary}"
-                   VerticalOptions="Center" />
-
+            <Label Text="KamPay" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource Primary}" VerticalOptions="Center" />
             <Grid Grid.Column="1" VerticalOptions="Center">
-                <Button 
-                    Text="🔔"
-                    FontSize="24"
-                    BackgroundColor="Transparent"
-                    BorderColor="Transparent"
-                    TextColor="{StaticResource Gray600}" 
-                    Command="{Binding GoToNotificationsCommand}" />
-
-                <Border StrokeThickness="0"
-                        BackgroundColor="Red"
-                        HeightRequest="10"
-                        WidthRequest="10"
-                        HorizontalOptions="End"
-                        VerticalOptions="Start"
-                        Margin="0,5,10,0"
-                        IsVisible="{Binding HasUnreadNotifications}">
+                <Button Text="🔔" FontSize="24" BackgroundColor="Transparent" BorderColor="Transparent" TextColor="{StaticResource Gray600}" Command="{Binding GoToNotificationsCommand}" />
+                <Border StrokeThickness="0" BackgroundColor="Red" HeightRequest="10" WidthRequest="10" HorizontalOptions="End" VerticalOptions="Start" Margin="0,5,10,0" IsVisible="{Binding HasUnreadNotifications}">
                     <Border.StrokeShape>
                         <RoundRectangle CornerRadius="5" />
                     </Border.StrokeShape>
                 </Border>
             </Grid>
         </Grid>
+
 
         <Grid Grid.Row="1" BackgroundColor="#F5F5F5">
             <CollectionView ItemsSource="{Binding Products}"
@@ -71,7 +58,7 @@
                     <DataTemplate x:DataType="models:Product">
                         <Frame Padding="10" CornerRadius="10" Margin="10,5" HasShadow="True">
                             <Frame.GestureRecognizers>
-                                <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=ProductTappedCommand}" CommandParameter="{Binding .}" />
+                                <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=ProductTappedCommand}" CommandParameter="{Binding .}"/>
                             </Frame.GestureRecognizers>
 
                             <Grid>
@@ -89,44 +76,22 @@
                                         </HorizontalStackLayout>
                                     </VerticalStackLayout>
                                 </Grid>
-
-                                <Border IsVisible="{Binding IsReserved}"
-                        BackgroundColor="#99FF9800" Padding="10,5"
-                        HorizontalOptions="Start"
-                        VerticalOptions="Start"
-                        StrokeThickness="0">
+                                <Border IsVisible="{Binding IsReserved}" BackgroundColor="#99FF9800" Padding="10,5" HorizontalOptions="Start" VerticalOptions="Start" StrokeThickness="0">
                                     <Border.StrokeShape>
                                         <RoundRectangle CornerRadius="0,0,15,0" />
                                     </Border.StrokeShape>
-                                    <Label Text="REZERVE EDİLDİ"
-                           TextColor="White"
-                           FontSize="10"
-                           FontAttributes="Bold"/>
+                                    <Label Text="REZERVE EDİLDİ" TextColor="White" FontSize="10" FontAttributes="Bold"/>
+                                </Border>
+                                <Border IsVisible="{Binding IsSold}" BackgroundColor="#994CAF50">
+                                    <Label Text="TAKAS YAPILDI" TextColor="White" FontSize="16" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center" />
                                 </Border>
                             </Grid>
                         </Frame>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
-                
-                <CollectionView.EmptyView>
-                    <StackLayout Padding="20" VerticalOptions="Center" HorizontalOptions="Center">
-                        <Label Text="{Binding EmptyMessage}" HorizontalTextAlignment="Center" />
-                    </StackLayout>
-                </CollectionView.EmptyView>
 
             </CollectionView>
-
-            <Button Text="+"
-                    FontSize="24"
-                    BackgroundColor="{StaticResource Accent}" TextColor="White"
-                    CornerRadius="30"
-                    WidthRequest="60"
-                    HeightRequest="60"
-                    VerticalOptions="End"
-                    HorizontalOptions="End"
-                    Margin="20"
-                    Command="{Binding GoToAddProductCommand}" />
-
+            <Button Text="+" FontSize="24" BackgroundColor="{StaticResource Accent}" TextColor="White" CornerRadius="30" WidthRequest="60" HeightRequest="60" VerticalOptions="End" HorizontalOptions="End" Margin="20" Command="{Binding GoToAddProductCommand}" />
             <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" Color="{StaticResource Primary}" VerticalOptions="Center" HorizontalOptions="Center"/>
         </Grid>
     </Grid>

@@ -17,6 +17,7 @@ namespace KamPay.Services
         Task<ServiceResult<List<UserBadge>>> GetUserBadgesAsync(string userId);
         Task<ServiceResult<UserBadge>> AwardBadgeAsync(string userId, string badgeId);
         Task<ServiceResult<bool>> AddPointsAsync(string userId, int points, string reason);
+        Task<ServiceResult<bool>> AddPointsForAction(string userId, UserAction action);
         Task<ServiceResult<bool>> CheckAndAwardBadgesAsync(string userId);
     }
 }

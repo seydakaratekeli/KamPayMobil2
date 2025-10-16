@@ -11,7 +11,6 @@ namespace KamPay.Services
 {
     public interface IQRCodeService
     {
-        // GÜNCELLEME: Metot imzasýna 'transactionId' eklendi.
         Task<ServiceResult<DeliveryQRCode>> GenerateDeliveryQRCodeAsync(string transactionId, string productId, string productTitle, string sellerId, string buyerId);
         Task<ServiceResult<DeliveryQRCode>> ValidateQRCodeAsync(string qrCodeData);
         Task<ServiceResult<bool>> CompleteDeliveryAsync(string qrCodeId);
@@ -22,141 +21,63 @@ namespace KamPay.Services
     public class FirebaseQRCodeService : IQRCodeService
     {
         private readonly FirebaseClient _firebaseClient;
+        // Puan servisini kullanmak için bir alan (field) ekliyoruz.
+        private readonly IUserProfileService _userProfileService;
         private const string QRCodesCollection = "delivery_qrcodes";
 
-        public FirebaseQRCodeService()
+        // HATA DÜZELTMESÝ: Constructor'ý güncelleyerek IUserProfileService'i parametre olarak alýyoruz.
+        public FirebaseQRCodeService(IUserProfileService userProfileService)
         {
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
-        }
-
-        // GÜNCELLEME: 'transactionId' parametresi artýk alýnýyor ve modele atanýyor.
-        public async Task<ServiceResult<DeliveryQRCode>> GenerateDeliveryQRCodeAsync(string transactionId, string productId, string productTitle, string sellerId, string buyerId)
-        {
-            try
-            {
-                var delivery = new DeliveryQRCode
-                {
-                    TransactionId = transactionId, // Yeni eklenen satýr
-                    ProductId = productId,
-                    ProductTitle = productTitle,
-                    SellerId = sellerId,
-                    BuyerId = buyerId
-                };
-
-                delivery.QRCodeData = GenerateQRCodeData(delivery);
-
-                await _firebaseClient
-                    .Child(QRCodesCollection)
-                    .Child(delivery.QRCodeId)
-                    .PutAsync(delivery);
-
-                return ServiceResult<DeliveryQRCode>.SuccessResult(delivery, "QR kod oluþturuldu");
-            }
-            catch (Exception ex)
-            {
-                return ServiceResult<DeliveryQRCode>.FailureResult("QR kod oluþturulamadý", ex.Message);
-            }
-        }
-
-        // Bu metot artýk doðru çalýþacak çünkü modelde 'TransactionId' var.
-        public async Task<ServiceResult<List<DeliveryQRCode>>> GetQRCodesForTransactionAsync(string transactionId)
-        {
-            try
-            {
-                var allCodes = await _firebaseClient
-                    .Child(QRCodesCollection)
-                    .OnceAsync<DeliveryQRCode>();
-
-                var qrCodes = allCodes
-                    .Select(q => q.Object)
-                    .Where(q => q.TransactionId == transactionId)
-                    .ToList();
-
-                return ServiceResult<List<DeliveryQRCode>>.SuccessResult(qrCodes);
-            }
-            catch (Exception ex)
-            {
-                return ServiceResult<List<DeliveryQRCode>>.FailureResult("QR kodlarý alýnamadý.", ex.Message);
-            }
-        }
-
-        // ... Diðer metotlar (CompleteDeliveryAsync, ValidateQRCodeAsync, GenerateQRCodeData) ayný kalabilir ...
-       
-        public string GenerateQRCodeData(DeliveryQRCode delivery)
-        {
-            return $"KAMPAY|{delivery.QRCodeId}|{delivery.ProductId}|{delivery.CreatedAt.Ticks}";
-        }
-
-        public async Task<ServiceResult<DeliveryQRCode>> ValidateQRCodeAsync(string qrCodeData)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(qrCodeData) || !qrCodeData.StartsWith("KAMPAY|"))
-                {
-                    return ServiceResult<DeliveryQRCode>.FailureResult("Geçersiz QR kod");
-                }
-                var parts = qrCodeData.Split('|');
-                if (parts.Length < 3)
-                {
-                    return ServiceResult<DeliveryQRCode>.FailureResult("QR kod formatý hatalý");
-                }
-                var qrCodeId = parts[1];
-                var delivery = await _firebaseClient
-                    .Child(QRCodesCollection)
-                    .Child(qrCodeId)
-                    .OnceSingleAsync<DeliveryQRCode>();
-                if (delivery == null)
-                {
-                    return ServiceResult<DeliveryQRCode>.FailureResult("QR kod bulunamadý");
-                }
-                if (delivery.IsUsed)
-                {
-                    return ServiceResult<DeliveryQRCode>.FailureResult("QR kod daha önce kullanýlmýþ");
-                }
-                if (delivery.IsExpired)
-                {
-                    return ServiceResult<DeliveryQRCode>.FailureResult("QR kodun süresi dolmuþ");
-                }
-                return ServiceResult<DeliveryQRCode>.SuccessResult(delivery, "QR kod geçerli");
-            }
-            catch (Exception ex)
-            {
-                return ServiceResult<DeliveryQRCode>.FailureResult("Doðrulama hatasý", ex.Message);
-            }
+            _userProfileService = userProfileService; // Gelen servisi kendi alanýmýza atýyoruz.
         }
 
         public async Task<ServiceResult<bool>> CompleteDeliveryAsync(string qrCodeId)
         {
             try
             {
-                var delivery = await _firebaseClient
-                    .Child(QRCodesCollection)
-                    .Child(qrCodeId)
-                    .OnceSingleAsync<DeliveryQRCode>();
-                if (delivery == null)
+                var deliveryNode = _firebaseClient.Child(QRCodesCollection).Child(qrCodeId);
+                var delivery = await deliveryNode.OnceSingleAsync<DeliveryQRCode>();
+
+                if (delivery == null || delivery.IsUsed)
                 {
-                    return ServiceResult<bool>.FailureResult("Teslimat bulunamadý");
+                    return ServiceResult<bool>.FailureResult("Teslimat bulunamadý veya zaten tamamlanmýþ.");
                 }
+
                 delivery.IsUsed = true;
                 delivery.UsedAt = DateTime.UtcNow;
                 delivery.Status = DeliveryStatus.Completed;
-                await _firebaseClient
-                    .Child(QRCodesCollection)
-                    .Child(qrCodeId)
-                    .PutAsync(delivery);
-                var product = await _firebaseClient
-                    .Child(Constants.ProductsCollection)
-                    .Child(delivery.ProductId)
-                    .OnceSingleAsync<Product>();
-                if (product != null)
+                await deliveryNode.PutAsync(delivery);
+
+                var transaction = await _firebaseClient.Child(Constants.TransactionsCollection).Child(delivery.TransactionId).OnceSingleAsync<Transaction>();
+                if (transaction != null)
                 {
-                    product.IsSold = true;
-                    product.SoldAt = DateTime.UtcNow;
-                    await _firebaseClient
-                        .Child(Constants.ProductsCollection)
-                        .Child(delivery.ProductId)
-                        .PutAsync(product);
+                    var allCodesResult = await GetQRCodesForTransactionAsync(transaction.TransactionId);
+                    if (allCodesResult.Success && allCodesResult.Data.All(c => c.IsUsed))
+                    {
+                        // TÜM TESLÝMATLAR BÝTTÝYSE:
+                        await MarkProductAsSold(transaction.ProductId);
+                        if (!string.IsNullOrEmpty(transaction.OfferedProductId))
+                        {
+                            await MarkProductAsSold(transaction.OfferedProductId);
+                        }
+
+                        transaction.Status = TransactionStatus.Completed;
+                        await _firebaseClient.Child(Constants.TransactionsCollection).Child(transaction.TransactionId).PutAsync(transaction);
+
+                        // PUANLARI EKLE
+                        if (transaction.Type == ProductType.Bagis)
+                        {
+                            await _userProfileService.AddPointsForAction(transaction.BuyerId, UserAction.ReceiveDonation);
+                        }
+                        else
+                        {
+                            await _userProfileService.AddPointsForAction(transaction.SellerId, UserAction.CompleteTransaction);
+                            await _userProfileService.AddPointsForAction(transaction.BuyerId, UserAction.CompleteTransaction);
+                        }
+                    }
                 }
+
                 return ServiceResult<bool>.SuccessResult(true, "Teslimat tamamlandý!");
             }
             catch (Exception ex)
@@ -164,5 +85,60 @@ namespace KamPay.Services
                 return ServiceResult<bool>.FailureResult("Teslimat tamamlanamadý", ex.Message);
             }
         }
+
+        // ... Diðer metotlarýnýzda deðiþiklik yok ...
+        #region Diðer Metotlar
+        private async Task MarkProductAsSold(string productId)
+        {
+            if (string.IsNullOrEmpty(productId)) return;
+            var productNode = _firebaseClient.Child(Constants.ProductsCollection).Child(productId);
+            var product = await productNode.OnceSingleAsync<Product>();
+            if (product != null)
+            {
+                product.IsSold = true;
+                product.SoldAt = DateTime.UtcNow;
+               // product.IsActive = false;
+                await productNode.PutAsync(product);
+            }
+        }
+        public async Task<ServiceResult<DeliveryQRCode>> GenerateDeliveryQRCodeAsync(string transactionId, string productId, string productTitle, string sellerId, string buyerId)
+        {
+            try
+            {
+                var delivery = new DeliveryQRCode { TransactionId = transactionId, ProductId = productId, ProductTitle = productTitle, SellerId = sellerId, BuyerId = buyerId };
+                delivery.QRCodeData = GenerateQRCodeData(delivery);
+                await _firebaseClient.Child(QRCodesCollection).Child(delivery.QRCodeId).PutAsync(delivery);
+                return ServiceResult<DeliveryQRCode>.SuccessResult(delivery, "QR kod oluþturuldu");
+            }
+            catch (Exception ex) { return ServiceResult<DeliveryQRCode>.FailureResult("QR kod oluþturulamadý", ex.Message); }
+        }
+        public async Task<ServiceResult<List<DeliveryQRCode>>> GetQRCodesForTransactionAsync(string transactionId)
+        {
+            try
+            {
+                var allCodes = await _firebaseClient.Child(QRCodesCollection).OnceAsync<DeliveryQRCode>();
+                var qrCodes = allCodes.Select(q => q.Object).Where(q => q.TransactionId == transactionId).ToList();
+                return ServiceResult<List<DeliveryQRCode>>.SuccessResult(qrCodes);
+            }
+            catch (Exception ex) { return ServiceResult<List<DeliveryQRCode>>.FailureResult("QR kodlarý alýnamadý.", ex.Message); }
+        }
+        public string GenerateQRCodeData(DeliveryQRCode delivery) { return $"KAMPAY|{delivery.QRCodeId}|{delivery.ProductId}|{delivery.CreatedAt.Ticks}"; }
+        public async Task<ServiceResult<DeliveryQRCode>> ValidateQRCodeAsync(string qrCodeData)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(qrCodeData) || !qrCodeData.StartsWith("KAMPAY|")) { return ServiceResult<DeliveryQRCode>.FailureResult("Geçersiz QR kod"); }
+                var parts = qrCodeData.Split('|');
+                if (parts.Length < 3) { return ServiceResult<DeliveryQRCode>.FailureResult("QR kod formatý hatalý"); }
+                var qrCodeId = parts[1];
+                var delivery = await _firebaseClient.Child(QRCodesCollection).Child(qrCodeId).OnceSingleAsync<DeliveryQRCode>();
+                if (delivery == null) { return ServiceResult<DeliveryQRCode>.FailureResult("QR kod bulunamadý"); }
+                if (delivery.IsUsed) { return ServiceResult<DeliveryQRCode>.FailureResult("QR kod daha önce kullanýlmýþ"); }
+                if (delivery.IsExpired) { return ServiceResult<DeliveryQRCode>.FailureResult("QR kodun süresi dolmuþ"); }
+                return ServiceResult<DeliveryQRCode>.SuccessResult(delivery, "QR kod geçerli");
+            }
+            catch (Exception ex) { return ServiceResult<DeliveryQRCode>.FailureResult("Doðrulama hatasý", ex.Message); }
+        }
+        #endregion
     }
 }

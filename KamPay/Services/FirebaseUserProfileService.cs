@@ -9,7 +9,16 @@ using KamPay.Models;
 
 namespace KamPay.Services
 {
-
+    // YENİ: Puan verilecek eylemleri tanımlayan enum.
+    // Sınıfın dışında ama namespace'in içinde tanımlamak iyi bir pratiktir.
+    public enum UserAction
+    {
+        AddProduct,
+        MakeDonation,
+        ReceiveBadge,
+        CompleteTransaction, // Başarılı bir takas/satış tamamlama
+        ReceiveDonation      // Bir bağışı teslim alma
+    }
 
     public class FirebaseUserProfileService : IUserProfileService
     {
@@ -20,6 +29,47 @@ namespace KamPay.Services
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
         }
 
+        // YENİ: Belirli bir eylem için puan ekleyen ana metot.
+        public async Task<ServiceResult<bool>> AddPointsForAction(string userId, UserAction action)
+        {
+            int points = GetPointsForAction(action);
+            string reason = GetReasonForAction(action);
+
+            if (points > 0)
+            {
+                return await AddPointsAsync(userId, points, reason);
+            }
+
+            return ServiceResult<bool>.SuccessResult(true, "Bu eylem için puan tanımlanmamış.");
+        }
+
+        // YENİ: Hangi eylemin kaç puan kazandıracağını belirleyen yardımcı metot.
+        private int GetPointsForAction(UserAction action)
+        {
+            return action switch
+            {
+                UserAction.AddProduct => 10,
+                UserAction.MakeDonation => 50,
+                UserAction.CompleteTransaction => 25, // Başarılı takas için 25 puan
+                UserAction.ReceiveDonation => 10,   // Bağış teslim alındığı için 10 puan
+                _ => 0
+            };
+        }
+
+        // YENİ: Puan kazanma nedenini bildirimlerde göstermek için metin döndüren yardımcı metot.
+        private string GetReasonForAction(UserAction action)
+        {
+            return action switch
+            {
+                UserAction.AddProduct => "Yeni ürün ekledin.",
+                UserAction.MakeDonation => "Değerli bir bağış yaptın.",
+                UserAction.CompleteTransaction => "Başarılı bir takas/satış tamamladın.",
+                UserAction.ReceiveDonation => "Bir bağışı teslim aldın.",
+                _ => "Genel aktivite."
+            };
+        }
+
+        // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
         public async Task<ServiceResult<UserStats>> GetUserStatsAsync(string userId)
         {
             try
@@ -31,7 +81,6 @@ namespace KamPay.Services
 
                 if (stats == null)
                 {
-                    // Yeni kullanıcı için istatistik oluştur
                     var user = await _firebaseClient
                         .Child(Constants.UsersCollection)
                         .Child(userId)
@@ -57,6 +106,7 @@ namespace KamPay.Services
             }
         }
 
+        // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
         public async Task<ServiceResult<bool>> UpdateUserStatsAsync(UserStats stats)
         {
             try
@@ -76,6 +126,7 @@ namespace KamPay.Services
             }
         }
 
+        // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
         public async Task<ServiceResult<List<UserBadge>>> GetUserBadgesAsync(string userId)
         {
             try
@@ -98,18 +149,17 @@ namespace KamPay.Services
             }
         }
 
+        // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
         public async Task<ServiceResult<UserBadge>> AwardBadgeAsync(string userId, string badgeId)
         {
             try
             {
-                // Zaten kazanılmış mı kontrol et
                 var existingBadges = await GetUserBadgesAsync(userId);
                 if (existingBadges.Success && existingBadges.Data.Any(b => b.BadgeId == badgeId))
                 {
                     return ServiceResult<UserBadge>.FailureResult("Rozet zaten kazanılmış");
                 }
 
-                // Badge bilgilerini al
                 var badge = await _firebaseClient
                     .Child(Constants.BadgesCollection)
                     .Child(badgeId)
@@ -120,7 +170,6 @@ namespace KamPay.Services
                     return ServiceResult<UserBadge>.FailureResult("Rozet bulunamadı");
                 }
 
-                // UserBadge oluştur
                 var userBadge = new UserBadge
                 {
                     UserId = userId,
@@ -135,7 +184,6 @@ namespace KamPay.Services
                     .Child(userBadge.UserBadgeId)
                     .PutAsync(userBadge);
 
-                // Bildirim oluştur
                 var notification = new Notification
                 {
                     UserId = userId,
@@ -159,6 +207,7 @@ namespace KamPay.Services
             }
         }
 
+        // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
         public async Task<ServiceResult<bool>> AddPointsAsync(string userId, int points, string reason)
         {
             try
@@ -174,7 +223,6 @@ namespace KamPay.Services
 
                 await UpdateUserStatsAsync(stats);
 
-                // Puan bildirimi gönder
                 var notification = new Notification
                 {
                     UserId = userId,
@@ -189,7 +237,6 @@ namespace KamPay.Services
                     .Child(notification.NotificationId)
                     .PutAsync(notification);
 
-                // Rozet kontrolü yap
                 await CheckAndAwardBadgesAsync(userId);
 
                 return ServiceResult<bool>.SuccessResult(true, $"+{points} puan");
@@ -200,6 +247,7 @@ namespace KamPay.Services
             }
         }
 
+        // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
         public async Task<ServiceResult<bool>> CheckAndAwardBadgesAsync(string userId)
         {
             try
@@ -216,12 +264,10 @@ namespace KamPay.Services
                     ? userBadgesResult.Data.Select(b => b.BadgeId).ToList()
                     : new List<string>();
 
-                // Tüm rozetleri kontrol et
                 var allBadges = Badge.GetDefaultBadges();
 
                 foreach (var badge in allBadges)
                 {
-                    // Zaten kazanılmışsa atla
                     if (earnedBadgeIds.Contains(badge.BadgeId))
                         continue;
 
@@ -245,13 +291,11 @@ namespace KamPay.Services
 
                     if (shouldAward)
                     {
-                        // Rozeti kaydet
                         await _firebaseClient
                             .Child(Constants.BadgesCollection)
                             .Child(badge.BadgeId)
                             .PutAsync(badge);
 
-                        // Kullanıcıya ver
                         await AwardBadgeAsync(userId, badge.BadgeId);
                     }
                 }

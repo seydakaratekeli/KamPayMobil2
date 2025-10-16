@@ -63,7 +63,11 @@ namespace KamPay
       new FirebaseMessagingService(sp.GetRequiredService<INotificationService>()));
 
             builder.Services.AddSingleton<IUserProfileService, FirebaseUserProfileService>();
-            builder.Services.AddSingleton<IQRCodeService, FirebaseQRCodeService>();
+            builder.Services.AddSingleton<IQRCodeService>(sp =>
+                new FirebaseQRCodeService(sp.GetRequiredService<IUserProfileService>())
+            ); 
+            
+            
             builder.Services.AddSingleton<ISurpriseBoxService, FirebaseSurpriseBoxService>();
             builder.Services.AddSingleton<IGoodDeedService, FirebaseGoodDeedService>();
             builder.Services.AddSingleton<IServiceSharingService, FirebaseServiceSharingService>();

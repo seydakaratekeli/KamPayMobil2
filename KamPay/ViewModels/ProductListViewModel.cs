@@ -240,9 +240,12 @@ namespace KamPay.ViewModels
         [RelayCommand]
         private async Task ProductTappedAsync(Product product)
         {
-            if (product == null) return;
-            await _productService.IncrementViewCountAsync(product.ProductId);
-            await Shell.Current.GoToAsync($"{nameof(ProductDetailPage)}?productId={product.ProductId}");
+            // Eðer ürün null ise veya ürün satýlmýþsa, hiçbir þey yapma ve metottan çýk.
+            if (product is null || product.IsSold)
+                return;
+
+            // Eðer ürün satýlmamýþsa, detay sayfasýna gitmeye devam et.
+            await Shell.Current.GoToAsync($"{nameof(ProductDetailPage)}?ProductId={product.ProductId}");
         }
 
         [RelayCommand]

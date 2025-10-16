@@ -151,19 +151,26 @@ namespace KamPay.ViewModels
             await Shell.Current.GoToAsync("qrscanner");
         }
 
-     
+
         private void UpdateUIState()
         {
+            // Teslimatların tamamlanıp tamamlanmadığını kontrol et
             bool myDeliveryCompleted = MyDelivery?.IsUsed ?? false;
             bool otherDeliveryCompleted = OtherUserDelivery?.IsUsed ?? false;
 
-            if (myDeliveryCompleted && otherDeliveryCompleted)
+            // EĞER HER İKİ TESLİMAT DA TAMAMLANDIYSA:
+            if (myDeliveryCompleted && (OtherUserDelivery == null || otherDeliveryCompleted))
             {
-                PageTitle = "Takas Tamamlandı!";
-                InstructionText = "Her iki ürün de başarıyla teslim edildi. Bu ekranı kapatabilirsiniz.";
+                PageTitle = "İşlem Tamamlandı!";
+                InstructionText = "Puanlarınız eklendi! 3 saniye içinde yönlendirileceksiniz...";
+
+                // Otomatik yönlendirme için bir görev başlat
                 Task.Run(async () => {
-                    await Task.Delay(3000);
-                    await MainThread.InvokeOnMainThreadAsync(async () => await Shell.Current.GoToAsync(".."));
+                    await Task.Delay(3000); // 3 saniye bekle
+                                            // Ana iş parçacığında (UI thread) sayfaya geri dön
+                    await MainThread.InvokeOnMainThreadAsync(async () =>
+                        await Shell.Current.GoToAsync("..")
+                    );
                 });
             }
             else if (otherDeliveryCompleted)
@@ -171,6 +178,7 @@ namespace KamPay.ViewModels
                 PageTitle = "Şimdi Sıra Sizde";
                 InstructionText = "Karşı tarafın ürününü teslim aldınız. Şimdi takası tamamlamak için kendi QR kodunuzu diğer kullanıcıya okutun.";
             }
+            // ... (diğer else if ve else blokları aynı kalabilir) ...
             else if (myDeliveryCompleted)
             {
                 PageTitle = "Onay Bekleniyor";

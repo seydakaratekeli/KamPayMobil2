@@ -34,13 +34,29 @@
                 </Frame>
 
                 <Label Grid.Row="2" Grid.Column="0" Text="{Binding MyDelivery.ProductTitle}" HorizontalOptions="Center" FontSize="12"/>
-
                 <Label Grid.Row="0" Grid.Column="1" Text="Diğer Ürün" HorizontalOptions="Center" FontAttributes="Bold"/>
                 <Frame Grid.Row="1" Grid.Column="1" HeightRequest="150" WidthRequest="150" Padding="10" HorizontalOptions="Center" BorderColor="{StaticResource Gray300}">
-                    <Grid>
-                        <Label Text="TESLİM ALINDI ✔️" IsVisible="{Binding OtherUserDelivery.IsUsed}" HorizontalOptions="Center" VerticalOptions="Center" FontAttributes="Bold" TextColor="{StaticResource Primary}"/>
-                        <Label Text="ONAY BEKLİYOR..." IsVisible="{Binding OtherUserDelivery.IsUsed, Converter={StaticResource InverseBoolConverter}}" HorizontalOptions="Center" VerticalOptions="Center" TextColor="{StaticResource Gray500}"/>
-                    </Grid>
+
+                    <Label HorizontalOptions="Center" VerticalOptions="Center">
+                        <Label.Style>
+                            <Style TargetType="Label">
+                                <Setter Property="Text" Value="ONAY BEKLİYOR..."/>
+                                <Setter Property="TextColor" Value="{StaticResource Gray500}"/>
+                                <Setter Property="FontAttributes" Value="None"/>
+
+                                <Style.Triggers>
+                                    <DataTrigger TargetType="Label"
+                                 Binding="{Binding OtherUserDelivery.IsUsed}"
+                                 Value="True">
+                                        <Setter Property="Text" Value="TESLİM ALINDI ✔️"/>
+                                        <Setter Property="TextColor" Value="{StaticResource Primary}"/>
+                                        <Setter Property="FontAttributes" Value="Bold"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Label.Style>
+                    </Label>
+
                 </Frame>
                 <Label Grid.Row="2" Grid.Column="1" Text="{Binding OtherUserDelivery.ProductTitle}" HorizontalOptions="Center" FontSize="12"/>
             </Grid>
