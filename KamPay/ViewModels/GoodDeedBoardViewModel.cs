@@ -43,9 +43,7 @@ public partial class GoodDeedBoardViewModel : ObservableObject
 
         if (postsResult.Success && currentUser != null)
         {
-            // ÖNCEKÝ HATALI KOD:
-            // Posts = new ObservableCollection<GoodDeedPost>(postsResult.Data.OrderByDescending(p => p.CreatedAt));
-
+           
             // YENÝ VE DOÐRU KOD:
             // 1. Mevcut koleksiyonun içini temizle
             Posts.Clear();

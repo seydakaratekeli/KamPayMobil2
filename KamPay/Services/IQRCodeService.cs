@@ -3,17 +3,20 @@ using Firebase.Database.Query;
 using KamPay.Helpers;
 using KamPay.Models;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace KamPay.Services
 {
     public interface IQRCodeService
     {
-        // GÜNCELLEME 1: Metot imzasý 4 parametre alacak þekilde düzeltildi.
-        Task<ServiceResult<DeliveryQRCode>> GenerateDeliveryQRCodeAsync(string productId, string productTitle, string sellerId, string buyerId);
+        // GÜNCELLEME: Metot imzasýna 'transactionId' eklendi.
+        Task<ServiceResult<DeliveryQRCode>> GenerateDeliveryQRCodeAsync(string transactionId, string productId, string productTitle, string sellerId, string buyerId);
         Task<ServiceResult<DeliveryQRCode>> ValidateQRCodeAsync(string qrCodeData);
         Task<ServiceResult<bool>> CompleteDeliveryAsync(string qrCodeId);
         string GenerateQRCodeData(DeliveryQRCode delivery);
+        Task<ServiceResult<List<DeliveryQRCode>>> GetQRCodesForTransactionAsync(string transactionId);
     }
 
     public class FirebaseQRCodeService : IQRCodeService
@@ -26,15 +29,16 @@ namespace KamPay.Services
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
         }
 
-        // GÜNCELLEME 2: Sýnýf içerisindeki metot imzasý da arayüzle ayný olacak þekilde düzeltildi.
-        public async Task<ServiceResult<DeliveryQRCode>> GenerateDeliveryQRCodeAsync(string productId, string productTitle, string sellerId, string buyerId)
+        // GÜNCELLEME: 'transactionId' parametresi artýk alýnýyor ve modele atanýyor.
+        public async Task<ServiceResult<DeliveryQRCode>> GenerateDeliveryQRCodeAsync(string transactionId, string productId, string productTitle, string sellerId, string buyerId)
         {
             try
             {
                 var delivery = new DeliveryQRCode
                 {
+                    TransactionId = transactionId, // Yeni eklenen satýr
                     ProductId = productId,
-                    ProductTitle = productTitle, // Parametreden gelen deðer kullanýlýyor
+                    ProductTitle = productTitle,
                     SellerId = sellerId,
                     BuyerId = buyerId
                 };
@@ -54,15 +58,37 @@ namespace KamPay.Services
             }
         }
 
+        // Bu metot artýk doðru çalýþacak çünkü modelde 'TransactionId' var.
+        public async Task<ServiceResult<List<DeliveryQRCode>>> GetQRCodesForTransactionAsync(string transactionId)
+        {
+            try
+            {
+                var allCodes = await _firebaseClient
+                    .Child(QRCodesCollection)
+                    .OnceAsync<DeliveryQRCode>();
+
+                var qrCodes = allCodes
+                    .Select(q => q.Object)
+                    .Where(q => q.TransactionId == transactionId)
+                    .ToList();
+
+                return ServiceResult<List<DeliveryQRCode>>.SuccessResult(qrCodes);
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<List<DeliveryQRCode>>.FailureResult("QR kodlarý alýnamadý.", ex.Message);
+            }
+        }
+
+        // ... Diðer metotlar (CompleteDeliveryAsync, ValidateQRCodeAsync, GenerateQRCodeData) ayný kalabilir ...
+       
         public string GenerateQRCodeData(DeliveryQRCode delivery)
         {
-            // Bu metodun içi ayný
             return $"KAMPAY|{delivery.QRCodeId}|{delivery.ProductId}|{delivery.CreatedAt.Ticks}";
         }
 
         public async Task<ServiceResult<DeliveryQRCode>> ValidateQRCodeAsync(string qrCodeData)
         {
-            // Bu metodun içi ayný
             try
             {
                 if (string.IsNullOrEmpty(qrCodeData) || !qrCodeData.StartsWith("KAMPAY|"))
@@ -101,7 +127,6 @@ namespace KamPay.Services
 
         public async Task<ServiceResult<bool>> CompleteDeliveryAsync(string qrCodeId)
         {
-            // Bu metodun içi ayný
             try
             {
                 var delivery = await _firebaseClient

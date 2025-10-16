@@ -14,6 +14,10 @@ namespace KamPay.Models
         public string ProductTitle { get; set; }
         public string SellerId { get; set; }
         public string BuyerId { get; set; }
+
+        // YENÝ EKLENEN ÖZELLÝK: QR kodu iþleme baðlamak için.
+        public string TransactionId { get; set; }
+
         public string QRCodeData { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime ExpiresAt { get; set; }

@@ -26,6 +26,7 @@ public static class Constants
     public const string UserBadgesCollection = "user_badges";
     public const string UserStatsCollection = "user_stats";
     public const string DeliveryQRCodesCollection = "delivery_qrcodes";
+    public const string QRCodesCollection = "delivery_qrcodes";
     public const string SurpriseBoxesCollection = "surprise_boxes";
     public const string GoodDeedPostsCollection = "good_deed_posts";
     public const string ServiceOffersCollection = "service_offers";

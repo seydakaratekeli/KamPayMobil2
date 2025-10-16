@@ -77,7 +77,7 @@ namespace KamPay.ViewModels
             }
         }
 
-       
+
         [RelayCommand]
         private async Task NotificationTappedAsync(Notification notification)
         {
@@ -99,7 +99,7 @@ namespace KamPay.ViewModels
                 await Application.Current.MainPage.DisplayAlert("Hata", $"Sayfa açýlamadý: {ex.Message}", "Tamam");
             }
         }
-        
+
 
         [RelayCommand]
         private async Task RefreshNotificationsAsync()
@@ -120,8 +120,8 @@ namespace KamPay.ViewModels
                 notification.IsRead = true; // UI'da anýnda güncelleme için
             }
         }
-        
-      
+
+
         [RelayCommand]
         private async Task GoToRelatedPageAsync(Notification notification)
         {

@@ -1,5 +1,6 @@
 using System;
 using KamPay.Models;
+using System.Text.Json.Serialization; // Bu using ifadesini ekleyin
 
 namespace KamPay.Models
 {
@@ -24,7 +25,35 @@ namespace KamPay.Models
         public TransactionStatus Status { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        // YENÝ: Bu liste, QR kodlarýnýn durumunu takip etmek için kullanýlacak.
+        [JsonIgnore] // Firebase'e bu alaný kaydetmemesi için ignore ediyoruz.
+        public List<DeliveryQRCode> DeliveryQRCodes { get; set; } = new();
 
+        public string StatusText
+        {
+            get
+            {
+                // Eðer tüm QR kodlarý kullanýldýysa, durumu "Tamamlandý" olarak göster.
+                if (Status == TransactionStatus.Accepted && DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed))
+                {
+                    return "Tamamlandý";
+                }
+
+                // Aksi takdirde mevcut enum durumunu kullan.
+                return Status switch
+                {
+                    TransactionStatus.Pending => "Onay Bekliyor",
+                    TransactionStatus.Accepted => "Kabul Edildi",
+                    TransactionStatus.Rejected => "Reddedildi",
+                    TransactionStatus.Completed => "Tamamlandý",
+                    TransactionStatus.Cancelled => "Ýptal Edildi",
+                    _ => "Bilinmiyor"
+                };
+            }
+        }
+
+        public bool CanManageDelivery => Status == TransactionStatus.Accepted && !(DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed));
+        public bool IsDeliveryCompleted => Status == TransactionStatus.Completed || (Status == TransactionStatus.Accepted && DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed));
         // Takas'a özel alanlar
         public string? OfferedProductId { get; set; } // Takas için teklif edilen ürünün ID'si
         public string? OfferedProductTitle { get; set; }
