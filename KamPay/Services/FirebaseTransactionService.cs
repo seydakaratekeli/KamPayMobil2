@@ -13,7 +13,7 @@ namespace KamPay.Services
     public class FirebaseTransactionService : ITransactionService
     {
         private readonly FirebaseClient _firebaseClient;
-        private readonly INotificationService _notificationService; 
+        private readonly INotificationService _notificationService;
         private readonly IProductService _productService;
 
         public FirebaseTransactionService(INotificationService notificationService, IProductService productService)
@@ -154,6 +154,8 @@ namespace KamPay.Services
             }
         }
 
+    
+
         public async Task<ServiceResult<Transaction>> RespondToOfferAsync(string transactionId, bool accept)
         {
             try
@@ -166,8 +168,7 @@ namespace KamPay.Services
                     return ServiceResult<Transaction>.FailureResult("Ýþlem bulunamadý.");
                 }
 
-                // Eðer iþlem zaten sonuçlandýysa tekrar iþlem yapmayý engelle
-                if (transaction.Status == TransactionStatus.Accepted || transaction.Status == TransactionStatus.Completed)
+                if (transaction.Status != TransactionStatus.Pending)
                 {
                     return ServiceResult<Transaction>.SuccessResult(transaction, "Bu teklif zaten yanýtlanmýþ.");
                 }
@@ -177,7 +178,7 @@ namespace KamPay.Services
 
                 await transactionNode.PutAsync(transaction);
 
-                // Alýcýya bildirim gönder
+                // Alýcýya bildirim gönder (mevcut kod)
                 await _notificationService.CreateNotificationAsync(new Notification
                 {
                     UserId = transaction.BuyerId,
@@ -187,19 +188,28 @@ namespace KamPay.Services
                     ActionUrl = nameof(Views.OffersPage)
                 });
 
-                // Eðer teklif KABUL EDÝLDÝYSE...
+                // EÐER TEKLÝF KABUL EDÝLDÝYSE...
                 if (accept)
                 {
-                    // 1. Talep edilen ürünü rezerve et
+                    // 1. Ürünleri rezerve et (mevcut kod)
                     await _productService.MarkAsReservedAsync(transaction.ProductId, true);
-
-                    // 2. EÐER BU BÝR TAKAS ÝSE, teklif edilen ürünü de rezerve et
                     if (transaction.Type == ProductType.Takas && !string.IsNullOrEmpty(transaction.OfferedProductId))
                     {
                         await _productService.MarkAsReservedAsync(transaction.OfferedProductId, true);
                     }
-                }
 
+                    // 2. QR Kod Servisini çaðýrarak teslimat kodlarýný oluþtur
+                    var qrCodeService = new FirebaseQRCodeService();
+
+                    // Satýcýnýn ürünü için QR kod oluþtur (ProductTitle eklendi)
+                    await qrCodeService.GenerateDeliveryQRCodeAsync(transaction.ProductId, transaction.ProductTitle, transaction.SellerId, transaction.BuyerId);
+
+                    // Eðer takas ise, alýcýnýn ürünü için de QR kod oluþtur (OfferedProductTitle eklendi)
+                    if (transaction.Type == ProductType.Takas && !string.IsNullOrEmpty(transaction.OfferedProductId))
+                    {
+                        await qrCodeService.GenerateDeliveryQRCodeAsync(transaction.OfferedProductId, transaction.OfferedProductTitle, transaction.BuyerId, transaction.SellerId);
+                    }
+                }
                 return ServiceResult<Transaction>.SuccessResult(transaction, "Teklif yanýtlandý.");
             }
             catch (Exception ex)
@@ -207,5 +217,7 @@ namespace KamPay.Services
                 return ServiceResult<Transaction>.FailureResult("Ýþlem sýrasýnda hata oluþtu.", ex.Message);
             }
         }
+
+    
     }
-    }
+}

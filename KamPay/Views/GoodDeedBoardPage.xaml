@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:KamPay.ViewModels"
+             xmlns:models="clr-namespace:KamPay.Models"
+             x:Class="KamPay.Views.GoodDeedBoardPage"
+             x:DataType="vm:GoodDeedBoardViewModel"
+             Title="İyilik Panosu">
+
+    <Grid RowDefinitions="Auto, *">
+        <Frame Grid.Row="0" Margin="10" Padding="15" BorderColor="{StaticResource Gray300}" CornerRadius="10">
+            <VerticalStackLayout Spacing="10">
+                <Label Text="Panoya Mesaj Bırak" FontSize="18" FontAttributes="Bold"/>
+                <Entry Placeholder="Başlık" Text="{Binding Title}" />
+                <Editor Placeholder="Açıklama..." Text="{Binding Description}" HeightRequest="100" AutoSize="Disabled" />
+                <Picker Title="İlan Tipi" ItemsSource="{Binding PostTypes}" SelectedItem="{Binding SelectedType}">
+                    <Picker.ItemDisplayBinding>
+                        <Binding Converter="{StaticResource PostTypeToTextConverter}" />
+                    </Picker.ItemDisplayBinding>
+                </Picker>
+                <Button Text="Paylaş" Command="{Binding CreatePostCommand}" IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}" />
+            </VerticalStackLayout>
+        </Frame>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Posts}" Margin="10,0">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:GoodDeedPost">
+                    <Frame Margin="0,5" Padding="15" BorderColor="{StaticResource Gray200}" CornerRadius="10">
+                        <Grid RowDefinitions="Auto, *, Auto" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="*, Auto">
+                                <Label Grid.Column="0" Text="{Binding Title}" FontAttributes="Bold" FontSize="16"/>
+                                <Label Grid.Column="1" Text="{Binding Type, Converter={StaticResource PostTypeToTextConverter}}" FontSize="12" TextColor="{StaticResource Primary}"/>
+                            </Grid>
+
+                            <Label Grid.Row="1" Text="{Binding Description}" LineBreakMode="WordWrap" />
+
+                            <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,10,0,0">
+                                <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                    <Label Text="{Binding UserName}" FontSize="12" FontAttributes="Bold"/>
+                                    <Label Text="{Binding CreatedAt, Converter={StaticResource DateTimeToTimeAgoConverter}}" FontSize="10" TextColor="{StaticResource Gray600}"/>
+                                </VerticalStackLayout>
+                                <HorizontalStackLayout Grid.Column="1" Spacing="10" VerticalOptions="Center">
+                                    <Label Text="{Binding LikeCount, StringFormat='❤️ {0}'}" />
+                                    <Button Text="Beğen" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GoodDeedBoardViewModel}}, Path=LikePostCommand}" CommandParameter="{Binding .}" HeightRequest="35" Padding="10,0"/>
+                                    <Button Text="Sil" IsVisible="{Binding IsOwner}" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GoodDeedBoardViewModel}}, Path=DeletePostCommand}" CommandParameter="{Binding .}" BackgroundColor="{StaticResource Danger}" HeightRequest="35" Padding="10,0"/>
+                                </HorizontalStackLayout>
+                            </Grid>
+                        </Grid>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+            <CollectionView.EmptyView>
+                <Label Text="Panoda henüz bir ilan yok." HorizontalOptions="Center" VerticalOptions="Center" Margin="20"/>
+            </CollectionView.EmptyView>
+        </CollectionView>
+
+        <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" Grid.RowSpan="2" VerticalOptions="Center" HorizontalOptions="Center"/>
+    </Grid>
+</ContentPage>

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Firebase.Database;
 using Firebase.Database.Query;
 using KamPay.Models;
-
+using Newtonsoft.Json;
 
 namespace KamPay.Models;
 
@@ -24,6 +24,9 @@ public class GoodDeedPost
     public int LikeCount { get; set; }
     public int CommentCount { get; set; }
     public string? ContactInfo { get; set; }
+
+    [JsonIgnore] // <-- Bu attribute, özelliðin Firebase'e kaydedilmesini engeller.
+    public bool IsOwner { get; set; }
 
     public GoodDeedPost()
     {

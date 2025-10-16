@@ -34,32 +34,36 @@ public partial class GoodDeedBoardViewModel : ObservableObject
         LoadPostsAsync();
     }
 
-    [RelayCommand]
     private async Task LoadPostsAsync()
     {
-        try
+        IsLoading = true;
+
+        var postsResult = await _goodDeedService.GetPostsAsync();
+        var currentUser = await _authService.GetCurrentUserAsync();
+
+        if (postsResult.Success && currentUser != null)
         {
-            IsLoading = true;
+            // ÖNCEKÝ HATALI KOD:
+            // Posts = new ObservableCollection<GoodDeedPost>(postsResult.Data.OrderByDescending(p => p.CreatedAt));
 
-            var result = await _goodDeedService.GetPostsAsync();
+            // YENÝ VE DOÐRU KOD:
+            // 1. Mevcut koleksiyonun içini temizle
+            Posts.Clear();
 
-            if (result.Success && result.Data != null)
+            // 2. Veritabanýndan gelen yeni verileri döngüyle ekle
+            var sortedPosts = postsResult.Data.OrderByDescending(p => p.CreatedAt);
+            foreach (var post in sortedPosts)
             {
-                Posts.Clear();
-                foreach (var post in result.Data)
-                {
-                    Posts.Add(post);
-                }
+                post.IsOwner = (post.UserId == currentUser.UserId);
+                Posts.Add(post);
             }
         }
-        catch (Exception ex)
+        else if (!postsResult.Success)
         {
-            await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
+            // Hata mesajý gösterilebilir
+            await Shell.Current.DisplayAlert("Hata", "Ýlanlar yüklenemedi.", "Tamam");
         }
-        finally
-        {
-            IsLoading = false;
-        }
+        IsLoading = false;
     }
 
     [RelayCommand]

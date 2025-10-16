@@ -11,6 +11,7 @@ namespace KamPay.Models
     {
         public string QRCodeId { get; set; }
         public string ProductId { get; set; }
+        public string ProductTitle { get; set; }
         public string SellerId { get; set; }
         public string BuyerId { get; set; }
         public string QRCodeData { get; set; }

@@ -114,6 +114,10 @@ namespace KamPay
             builder.Services.AddTransient<NotificationsPage>();
             builder.Services.AddTransient<OffersPage>();
             builder.Services.AddTransient<TradeOfferView>();
+            builder.Services.AddTransient<GoodDeedBoardPage>();
+            builder.Services.AddTransient<ServiceSharingPage>();
+            builder.Services.AddTransient<QRCodeDisplayPage>(); 
+            builder.Services.AddTransient<QRScannerPage>();
 
 #if DEBUG
             builder.Logging.AddDebug();

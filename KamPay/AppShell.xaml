@@ -36,11 +36,19 @@
             <ShellContent ContentTemplate="{DataTemplate views:FavoritesPage}" Route="FavoritesPage" />
         </Tab>
 
+        <Tab Title="Pano" Icon="good_board.svg">
+            <ShellContent ContentTemplate="{DataTemplate views:GoodDeedBoardPage}" Route="GoodDeedBoardPage" />
+        </Tab>
+
         <Tab Title="Mesajlar"
              Icon="{Binding BindingContext.HasUnreadMessages, Source={x:Reference shell}, Converter={StaticResource UnreadToIconConverter}}">
             <ShellContent ContentTemplate="{DataTemplate views:MessagesPage}" Route="MessagesPage" />
         </Tab>
 
+        <Tab Title="Hizmet" Icon="briefcase.svg">
+            <ShellContent ContentTemplate="{DataTemplate views:ServiceSharingPage}" Route="ServiceSharingPage" />
+        </Tab>
+        
         <Tab Title="Profil" Icon="person_icon.svg">
             <ShellContent ContentTemplate="{DataTemplate views:ProfilePage}" Route="ProfilePage" />
         </Tab>

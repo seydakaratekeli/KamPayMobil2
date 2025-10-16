@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:KamPay.ViewModels"
+             xmlns:models="clr-namespace:KamPay.Models"
+             x:Class="KamPay.Views.ServiceSharingPage"
+             x:DataType="vm:ServiceSharingViewModel"
+             Title="Zaman Bankası">
+    <Grid RowDefinitions="Auto, *">
+        <Frame Grid.Row="0" Margin="10" Padding="15" BorderColor="{StaticResource Gray300}" CornerRadius="10">
+            <VerticalStackLayout Spacing="10">
+                <Label Text="Bir Hizmet Paylaş" FontSize="18" FontAttributes="Bold"/>
+                <Entry Placeholder="Hizmet Başlığı (Örn: Matematik Özel Dersi)" Text="{Binding ServiceTitle}" />
+                <Editor Placeholder="Hizmetin Detayları..." Text="{Binding ServiceDescription}" HeightRequest="100" AutoSize="Disabled"/>
+                <Picker Title="Kategori" ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}">
+                    <Picker.ItemDisplayBinding>
+                        <Binding Converter="{StaticResource ServiceCategoryToTextConverter}" />
+                    </Picker.ItemDisplayBinding>
+                </Picker>
+                <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
+                    <Label Text="Süre (Saat Kredisi):" VerticalOptions="Center"/>
+                    <Stepper Value="{Binding TimeCredits}" Minimum="1" Maximum="10" />
+                    <Label Text="{Binding TimeCredits}" FontAttributes="Bold" VerticalOptions="Center"/>
+                </HorizontalStackLayout>
+                <Button Text="Hizmeti Paylaş" Command="{Binding CreateServiceCommand}" IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolConverter}}"/>
+            </VerticalStackLayout>
+        </Frame>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Services}" Margin="10,0">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:ServiceOffer">
+                    <Frame Margin="0,5" Padding="15" BorderColor="{StaticResource Gray200}" CornerRadius="10">
+                        <Grid RowDefinitions="Auto, *, Auto" RowSpacing="8">
+                            <Grid Grid.Row="0" ColumnDefinitions="*, Auto">
+                                <Label Grid.Column="0" Text="{Binding Title}" FontAttributes="Bold" FontSize="16"/>
+                                <Label Grid.Column="1" Text="{Binding Category, Converter={StaticResource ServiceCategoryToTextConverter}}" FontSize="12" TextColor="{StaticResource Secondary}"/>
+                            </Grid>
+
+                            <Label Grid.Row="1" Text="{Binding Description}" LineBreakMode="WordWrap" />
+
+                            <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,10,0,0">
+                                <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                    <Label Text="{Binding ProviderName}" FontSize="12" FontAttributes="Bold"/>
+                                    <Label Text="{Binding CreatedAt, Converter={StaticResource DateTimeToTimeAgoConverter}}" FontSize="10" TextColor="{StaticResource Gray600}"/>
+                                </VerticalStackLayout>
+                                <HorizontalStackLayout Grid.Column="1" Spacing="10" VerticalOptions="Center">
+                                    <Label Text="{Binding TimeCredits, StringFormat='{0} Saat'}" FontAttributes="Bold" VerticalOptions="Center" TextColor="{StaticResource Accent}"/>
+                                    <Button Text="Talep Et" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceSharingViewModel}}, Path=RequestServiceCommand}" CommandParameter="{Binding .}" HeightRequest="35" Padding="10,0"/>
+                                </HorizontalStackLayout>
+                            </Grid>
+                        </Grid>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+            <CollectionView.EmptyView>
+                <Label Text="Paylaşılan bir hizmet henüz yok." HorizontalOptions="Center" VerticalOptions="Center" Margin="20"/>
+            </CollectionView.EmptyView>
+        </CollectionView>
+
+        <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" Grid.RowSpan="2" VerticalOptions="Center" HorizontalOptions="Center"/>
+    </Grid>
+</ContentPage>

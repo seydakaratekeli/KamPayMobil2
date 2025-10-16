@@ -6,6 +6,7 @@ using Firebase.Database.Streaming;
 using KamPay.Helpers;
 using KamPay.Models;
 using KamPay.Services;
+using KamPay.Views;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -112,6 +113,13 @@ namespace KamPay.ViewModels
         {
             IsIncomingSelected = true;
             IsOutgoingSelected = false;
+        }
+
+        [RelayCommand]
+        private async Task ManageDeliveryAsync(Transaction transaction)
+        {
+            if (transaction == null) return;
+            await Shell.Current.GoToAsync($"{nameof(QRCodeDisplayPage)}?transactionId={transaction.TransactionId}");
         }
 
         [RelayCommand]
