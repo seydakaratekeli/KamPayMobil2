@@ -70,7 +70,10 @@ namespace KamPay
             
             builder.Services.AddSingleton<ISurpriseBoxService, FirebaseSurpriseBoxService>();
             builder.Services.AddSingleton<IGoodDeedService, FirebaseGoodDeedService>();
-            builder.Services.AddSingleton<IServiceSharingService, FirebaseServiceSharingService>();
+
+            builder.Services.AddSingleton<IServiceSharingService>(sp =>
+                new FirebaseServiceSharingService(sp.GetRequiredService<INotificationService>())
+            );
             builder.Services.AddSingleton<INotificationService, FirebaseNotificationService>();
 
             builder.Services.AddSingleton<ITransactionService>(sp =>
@@ -91,10 +94,7 @@ namespace KamPay
             builder.Services.AddTransient<ProductListViewModel>();
             builder.Services.AddTransient<OffersViewModel>();
             builder.Services.AddTransient<TradeOfferViewModel>();
-
-
             builder.Services.AddTransient<ProductDetailViewModel>();
-
             builder.Services.AddTransient<MessagesViewModel>();
             builder.Services.AddTransient<ChatViewModel>();
             builder.Services.AddTransient<FavoritesViewModel>();
@@ -103,8 +103,11 @@ namespace KamPay
             builder.Services.AddTransient<SurpriseBoxViewModel>();
             builder.Services.AddTransient<GoodDeedBoardViewModel>();
             builder.Services.AddTransient<ServiceSharingViewModel>();
+            builder.Services.AddTransient<ServiceRequestsViewModel>(); // Bu satırı ekleyin
+            builder.Services.AddTransient<SurpriseBoxViewModel>();
 
             // Views
+            builder.Services.AddTransient<SurpriseBoxPage>();
             builder.Services.AddTransient<RegisterPage>();
             builder.Services.AddTransient<LoginPage>();
             builder.Services.AddTransient<MainPage>();
@@ -123,7 +126,7 @@ namespace KamPay
             builder.Services.AddTransient<ServiceSharingPage>();
             builder.Services.AddTransient<QRCodeDisplayPage>();
             builder.Services.AddTransient<QRScannerPage>();
-
+            builder.Services.AddTransient<ServiceRequestsPage>(); // Bu satırı ekleyin
 #if DEBUG
             builder.Logging.AddDebug();
 #endif

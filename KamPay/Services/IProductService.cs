@@ -22,6 +22,8 @@ namespace KamPay.Services
         Task<ServiceResult<bool>> IncrementViewCountAsync(string productId);
         Task<ServiceResult<List<Category>>> GetCategoriesAsync();
         ValidationResult ValidateProduct(ProductRequest request);
+        Task<ServiceResult<List<Product>>> GetProductsAsync(string categoryId = null, string searchText = null);
+        Task<ServiceResult<bool>> UpdateProductOwnerAsync(string productId, string newOwnerId, bool markAsSold = true);
     }
 
   

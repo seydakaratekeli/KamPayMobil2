@@ -2,6 +2,7 @@ using CommunityToolkit.Maui.Views;
 using CommunityToolkit.Mvvm.Messaging;
 using KamPay.Services;
 using KamPay.ViewModels;
+using System; // Bu using ifadesini ekleyin
 
 namespace KamPay.Views;
 
@@ -15,26 +16,27 @@ public partial class ProductDetailPage : ContentPage
         BindingContext = viewModel;
         _serviceProvider = serviceProvider; // DI Container'ý alýyoruz
 
-        // Mesajý dinlemeye baþla
         WeakReferenceMessenger.Default.Register<ShowTradeOfferPopupMessage>(this, async (r, m) =>
         {
-            // Gerekli servisleri DI container'dan al
-            var tradeViewModel = new TradeOfferViewModel(
-                _serviceProvider.GetRequiredService<IProductService>(),
-                _serviceProvider.GetRequiredService<ITransactionService>(),
-                _serviceProvider.GetRequiredService<IAuthenticationService>())
+            // --- DÜZELTÝLMÝÞ KISIM ---
+            // Artýk 'new' anahtar kelimesiyle nesne oluþturmuyoruz.
+            // Bunun yerine, DI container'dan bir 'TradeOfferView' örneði talep ediyoruz.
+            var tradePopup = _serviceProvider.GetRequiredService<TradeOfferView>();
+
+            // Popup'ýn ViewModel'ine eriþip, takas yapýlacak ürünün ID'sini atýyoruz.
+            if (tradePopup.BindingContext is TradeOfferViewModel vm)
             {
-                ProductId = m.TargetProduct.ProductId
-            };
+                vm.ProductId = m.TargetProduct.ProductId;
+            }
 
-            var tradePopup = new TradeOfferView(tradeViewModel);
-
-            // Pop-up'ý göster
+            // Popup'ý kullanýcýya gösteriyoruz.
             await this.ShowPopupAsync(tradePopup);
         });
     }
 
-    // Sayfadan ayrýlýrken mesaj dinleyicisini kapat
+    // Sayfadan ayrýlýrken (örneðin geri tuþuna basýldýðýnda) mesaj dinleyicisini kapatýyoruz.
+    // Bu, bellek sýzýntýlarýný (memory leaks) önlemek için kritik bir adýmdýr.
+    // protected override void OnDisappearing()
     protected override void OnDisappearing()
     {
         base.OnDisappearing();

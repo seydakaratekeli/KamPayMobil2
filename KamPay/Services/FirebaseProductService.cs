@@ -538,4 +538,77 @@ public class FirebaseProductService : IProductService
         return result;
     }
     #endregion
+    // ... (Mevcut metotlarýnýzýn sonu) ...
+
+    // --- YENÝ EKLENEN METOT 1 ---
+    public async Task<ServiceResult<List<Product>>> GetProductsAsync(string categoryId = null, string searchText = null)
+    {
+        try
+        {
+            var query = _firebaseClient.Child(Constants.ProductsCollection).OrderBy("CreatedAt");
+            var productItems = await query.OnceAsync<Product>();
+
+            var products = productItems.Select(item =>
+            {
+                var product = item.Object;
+                product.ProductId = item.Key;
+                return product;
+            })
+            .Where(p => !p.IsSold) // Sadece satýlmamýþ olanlarý getir
+            .OrderByDescending(p => p.CreatedAt)
+            .ToList();
+
+            // Kategoriye göre filtrele
+            if (!string.IsNullOrEmpty(categoryId))
+            {
+                products = products.Where(p => p.CategoryId == categoryId).ToList();
+            }
+
+            // Arama metnine göre filtrele
+            if (!string.IsNullOrEmpty(searchText))
+            {
+                products = products.Where(p => p.Title.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            return ServiceResult<List<Product>>.SuccessResult(products);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<List<Product>>.FailureResult("Hata", ex.Message);
+        }
+    }
+
+    // --- YENÝ EKLENEN METOT 2 ---
+    public async Task<ServiceResult<bool>> UpdateProductOwnerAsync(string productId, string newOwnerId, bool markAsSold = true)
+    {
+        try
+        {
+            var productNode = _firebaseClient.Child(Constants.ProductsCollection).Child(productId);
+            var product = await productNode.OnceSingleAsync<Product>();
+
+            if (product == null)
+            {
+                return ServiceResult<bool>.FailureResult("Ürün bulunamadý.");
+            }
+
+            product.UserId = newOwnerId; // Yeni sahibi ata
+            if (markAsSold)
+            {
+                // Ürünü hem satýldý hem de rezerve deðil olarak iþaretle
+                product.IsSold = true;
+                product.IsReserved = false;
+            }
+
+            await productNode.PutAsync(product);
+            return ServiceResult<bool>.SuccessResult(true, "Ürün sahibi güncellendi.");
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<bool>.FailureResult("Hata", ex.Message);
+        }
+    }
+
+
+
+
 }

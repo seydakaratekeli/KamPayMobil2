@@ -1,6 +1,5 @@
 namespace KamPay.Models;
 
-
 public class ServiceOffer
 {
     public string ServiceId { get; set; }
@@ -36,28 +35,25 @@ public enum ServiceCategory
     Other = 7           // Diðer
 }
 
+// --- YENÝ EKLENEN MODELLER ---
+
 public class ServiceRequest
 {
-    public string RequestId { get; set; }
+    public string RequestId { get; set; } = Guid.NewGuid().ToString();
     public string ServiceId { get; set; }
-    public string RequesterId { get; set; }
+    public string ServiceTitle { get; set; } // Bildirimler ve UI için
+    public string ProviderId { get; set; }   // Hizmeti sunan kiþi
+    public string RequesterId { get; set; }  // Hizmeti talep eden kiþi
     public string RequesterName { get; set; }
     public string Message { get; set; }
-    public DateTime RequestedAt { get; set; }
-    public ServiceRequestStatus Status { get; set; }
-
-    public ServiceRequest()
-    {
-        RequestId = Guid.NewGuid().ToString();
-        RequestedAt = DateTime.UtcNow;
-        Status = ServiceRequestStatus.Pending;
-    }
+    public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
+    public ServiceRequestStatus Status { get; set; } = ServiceRequestStatus.Pending;
 }
 
 public enum ServiceRequestStatus
 {
-    Pending = 0,
-    Accepted = 1,
-    Declined = 2,
-    Completed = 3
+    Pending = 0,    // Beklemede
+    Accepted = 1,   // Kabul Edildi
+    Declined = 2,   // Reddedildi
+    Completed = 3   // Tamamlandý
 }

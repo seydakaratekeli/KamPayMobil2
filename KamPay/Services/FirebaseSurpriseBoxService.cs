@@ -1,114 +1,85 @@
 ﻿using Firebase.Database;
-using Firebase.Database.Query;
 using KamPay.Helpers;
 using KamPay.Models;
-using KamPay.Services;
-namespace KamPay.Services;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 
-public class FirebaseSurpriseBoxService : ISurpriseBoxService
+namespace KamPay.Services
 {
-    private readonly FirebaseClient _firebaseClient;
-    private const string SurpriseBoxesCollection = "surprise_boxes";
-
-    public FirebaseSurpriseBoxService()
+    // ISurpriseBoxService arayüzünü uyguladığını belirtiyoruz
+    public class FirebaseSurpriseBoxService : ISurpriseBoxService
     {
-        _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
-    }
+        private readonly FirebaseClient _firebaseClient;
+        // Diğer servislerle konuşmak için dependency injection kullanıyoruz
+        private readonly IUserProfileService _userProfileService;
+        private readonly IProductService _productService;
+        private const int BoxCost = 100; // Kutunun maliyetini bir sabit olarak tanımlıyoruz
 
-    public async Task<ServiceResult<SurpriseBox>> CreateSurpriseBoxAsync(string productId, User donor)
-    {
-        try
+        // Constructor'ı (kurucu metot) DI uyumlu hale getiriyoruz
+        public FirebaseSurpriseBoxService(IUserProfileService userProfileService, IProductService productService)
         {
-            var product = await _firebaseClient
-                .Child(Constants.ProductsCollection)
-                .Child(productId)
-                .OnceSingleAsync<Product>();
+            _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
+            _userProfileService = userProfileService;
+            _productService = productService;
+        }
 
-            if (product == null)
+        // ISurpriseBoxService arayüzünün gerektirdiği, eksik olan metot
+        public async Task<ServiceResult<Product>> RedeemSurpriseBoxAsync(string userId)
+        {
+            try
             {
-                return ServiceResult<SurpriseBox>.FailureResult("Ürün bulunamadı");
+                // 1. Kullanıcının puanını kontrol et
+                var userStatsResult = await _userProfileService.GetUserStatsAsync(userId);
+                if (!userStatsResult.Success || userStatsResult.Data.Points < BoxCost)
+                {
+                    return ServiceResult<Product>.FailureResult("Yetersiz Puan!", $"Bu işlem için {BoxCost} puana ihtiyacınız var.");
+                }
+
+                // 2. Bağış olarak işaretlenmiş, uygun ürünleri bul
+                var allProductsResult = await _productService.GetProductsAsync();
+                if (!allProductsResult.Success || allProductsResult.Data == null)
+                {
+                    return ServiceResult<Product>.FailureResult("Hata", "Ürünler alınamadı.");
+                }
+
+                var availableDonations = allProductsResult.Data
+                    .Where(p => p.Type == ProductType.Bagis && !p.IsSold && !p.IsReserved)
+                    .ToList();
+
+                if (availableDonations.Count == 0)
+                {
+                    return ServiceResult<Product>.FailureResult("Ürün Yok", "Şu anda sürpriz kutusu için uygun bir ürün bulunmuyor.");
+                }
+
+                // 3. Rastgele bir ürün seç
+                var random = new Random();
+                var surpriseProduct = availableDonations[random.Next(availableDonations.Count)];
+
+                // 4. Puanı düş ve ürünü kullanıcıya ata (sahibini güncelle)
+                var pointsDeducted = await _userProfileService.AddPointsAsync(userId, -BoxCost, "Sürpriz Kutu açıldı");
+
+                if (!pointsDeducted.Success)
+                {
+                    return ServiceResult<Product>.FailureResult("Hata", "Puan düşülürken bir sorun oluştu.");
+                }
+
+                // Ürünün sahibini, kutuyu açan kullanıcı olarak güncelle
+                var ownerUpdated = await _productService.UpdateProductOwnerAsync(surpriseProduct.ProductId, userId);
+                if (!ownerUpdated.Success)
+                {
+                    // Eğer ürün sahibi güncellenemezse, bir hata olduğunu belirt.
+                    // İleri seviye bir implementasyonda burada kullanıcının puanı iade edilebilir.
+                    return ServiceResult<Product>.FailureResult("Hata", "Ürün sahipliği güncellenirken bir sorun oluştu.");
+                }
+
+                // 5. Başarılı sonucu ve kazanılan ürünü döndür
+                return ServiceResult<Product>.SuccessResult(surpriseProduct, "Tebrikler!");
             }
-
-            var box = new SurpriseBox
+            catch (Exception ex)
             {
-                DonorId = donor.UserId,
-                DonorName = donor.FullName,
-                ProductId = productId,
-                ProductTitle = product.Title,
-                ProductImage = product.ThumbnailUrl
-            };
-
-            await _firebaseClient
-                .Child(SurpriseBoxesCollection)
-                .Child(box.BoxId)
-                .PutAsync(box);
-
-            return ServiceResult<SurpriseBox>.SuccessResult(
-                box,
-                "Sürpriz kutu oluşturuldu! Rastgele bir öğrenci bu hediyeyi alacak 🎁"
-            );
-        }
-        catch (Exception ex)
-        {
-            return ServiceResult<SurpriseBox>.FailureResult("Hata oluştu", ex.Message);
-        }
-    }
-
-    public async Task<ServiceResult<SurpriseBox>> OpenRandomBoxAsync(string userId)
-    {
-        try
-        {
-            var availableBoxes = await GetAvailableBoxesAsync();
-
-            if (!availableBoxes.Success || !availableBoxes.Data.Any())
-            {
-                return ServiceResult<SurpriseBox>.FailureResult("Şu an açılabilecek sürpriz kutu yok");
+                return ServiceResult<Product>.FailureResult("Beklenmedik Hata", ex.Message);
             }
-
-            // Rastgele bir kutu seç
-            var random = new Random();
-            var selectedBox = availableBoxes.Data[random.Next(availableBoxes.Data.Count)];
-
-            // Kutuyu aç
-            selectedBox.IsOpened = true;
-            selectedBox.RecipientId = userId;
-            selectedBox.OpenedAt = DateTime.UtcNow;
-
-            await _firebaseClient
-                .Child(SurpriseBoxesCollection)
-                .Child(selectedBox.BoxId)
-                .PutAsync(selectedBox);
-
-            return ServiceResult<SurpriseBox>.SuccessResult(
-                selectedBox,
-                $"Tebrikler! {selectedBox.ProductTitle} senin oldu! 🎉"
-            );
-        }
-        catch (Exception ex)
-        {
-            return ServiceResult<SurpriseBox>.FailureResult("Hata oluştu", ex.Message);
-        }
-    }
-
-    public async Task<ServiceResult<List<SurpriseBox>>> GetAvailableBoxesAsync()
-    {
-        try
-        {
-            var allBoxes = await _firebaseClient
-                .Child(SurpriseBoxesCollection)
-                .OnceAsync<SurpriseBox>();
-
-            var availableBoxes = allBoxes
-                .Select(b => b.Object)
-                .Where(b => !b.IsOpened)
-                .OrderBy(b => b.CreatedAt)
-                .ToList();
-
-            return ServiceResult<List<SurpriseBox>>.SuccessResult(availableBoxes);
-        }
-        catch (Exception ex)
-        {
-            return ServiceResult<List<SurpriseBox>>.FailureResult("Hata", ex.Message);
         }
     }
 }

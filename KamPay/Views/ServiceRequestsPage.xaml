@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:KamPay.ViewModels"
+             xmlns:model="clr-namespace:KamPay.Models"
+             xmlns:converters="clr-namespace:KamPay.Converters" x:DataType="vm:ServiceRequestsViewModel"
+             x:Class="KamPay.Views.ServiceRequestsPage"
+             Title="Hizmet Taleplerim">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:EnumToBoolConverter x:Key="EnumToBoolConverter" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="*">
+        <ActivityIndicator IsRunning="{Binding IsLoading}" Grid.RowSpan="2" HorizontalOptions="Center" VerticalOptions="Center" ZIndex="1" />
+
+        <CollectionView ItemsSource="{Binding MyServiceRequests}"
+                        Grid.Row="0"
+                        SelectionMode="None"
+                        EmptyView="Henüz size gelen bir hizmet talebi yok.">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="model:ServiceRequest">
+                    <Frame Margin="10" Padding="15" CornerRadius="15" BorderColor="LightGray">
+                        <Grid RowDefinitions="Auto, Auto, Auto" ColumnDefinitions="*, Auto">
+
+                            <Label Grid.Row="0" Grid.Column="0" FontSize="Medium" FontAttributes="Bold" Text="{Binding ServiceTitle}" />
+                            <Label Grid.Row="1" Grid.Column="0" FontSize="Small" Text="{Binding RequesterName, StringFormat='Talep Eden: {0}'}" />
+                            <Label Grid.Row="2" Grid.Column="0" FontAttributes="Italic" Text="{Binding Message}" Margin="0,5,0,0" MaxLines="2" LineBreakMode="TailTruncation"/>
+
+                            <Label Grid.Row="0" Grid.Column="1" Text="{Binding Status}" HorizontalOptions="End" />
+
+                            <HorizontalStackLayout Grid.Row="2" Grid.Column="1" Spacing="10" VerticalOptions="End" IsVisible="{Binding Status, Converter={StaticResource EnumToBoolConverter}, ConverterParameter={x:Static model:ServiceRequestStatus.Pending}}">
+                                <Button Text="Reddet" 
+                                        BackgroundColor="Red"
+                                        Clicked="DeclineButton_Clicked" />
+                                <Button Text="Kabul Et" 
+                                        BackgroundColor="Green"
+                                        Clicked="AcceptButton_Clicked"/>
+                            </HorizontalStackLayout>
+
+                        </Grid>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

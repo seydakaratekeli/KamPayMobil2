@@ -179,6 +179,13 @@ public partial class ProfileViewModel : ObservableObject
     {
         await Shell.Current.GoToAsync(nameof(Views.OffersPage));
     }
+
+    [RelayCommand]
+    private async Task GoToServiceRequests()
+    {
+        await Shell.Current.GoToAsync(nameof(ServiceRequestsPage));
+    }
+
     [RelayCommand]
     private async Task ProductTappedAsync(Product product)
     {

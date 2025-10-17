@@ -288,6 +288,12 @@ namespace KamPay.ViewModels
             };
         }
 
+        [RelayCommand]
+        private async Task GoToSurpriseBox()
+        {
+            await Shell.Current.GoToAsync(nameof(SurpriseBoxPage));
+        }
+
         public void Dispose()
         {
             _notificationSubscription?.Dispose();

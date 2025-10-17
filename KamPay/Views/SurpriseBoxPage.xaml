@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:KamPay.ViewModels"
+             x:DataType="vm:SurpriseBoxViewModel"
+             x:Class="KamPay.Views.SurpriseBoxPage"
+             Title="Sürpriz Kutu">
+
+    <Grid RowDefinitions="*, Auto" Padding="20">
+
+        <VerticalStackLayout Grid.Row="0"
+                             VerticalOptions="Center"
+                             HorizontalOptions="Center"
+                             Spacing="20">
+
+            <Image x:Name="BoxImage"
+                   Source="gift_box.png" 
+                   WidthRequest="150"
+                   HeightRequest="150">
+                <Image.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding RedeemBoxCommand}" />
+                </Image.GestureRecognizers>
+            </Image>
+
+            <Label Text="Sürpriz Kutu!"
+                   FontSize="32"
+                   FontAttributes="Bold"
+                   HorizontalTextAlignment="Center"/>
+
+            <Label Text="100 puan karşılığında bir sürpriz kutu açarak bağışlanmış ürünlerden birini kazanma şansı yakala!"
+                   HorizontalTextAlignment="Center"
+                   TextColor="Gray"/>
+
+            <Frame x:Name="ResultFrame"
+                   IsVisible="False"
+                   Padding="15"
+                   CornerRadius="15"
+                   BorderColor="LightGray"
+                   BackgroundColor="#F5F5F5">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Tebrikler!"
+                           FontSize="24"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource Primary}"
+                           HorizontalTextAlignment="Center"/>
+                    <Image Source="{Binding RedemptionResult.ThumbnailUrl}"
+                           HeightRequest="120"
+                           Aspect="AspectFit"/>
+                    <Label Text="{Binding RedemptionResult.Title}"
+                           FontAttributes="Bold"
+                           HorizontalTextAlignment="Center"/>
+                    <Label Text="ürününü kazandın!"
+                           HorizontalTextAlignment="Center"/>
+                    <Button Text="Harika!"
+                            Clicked="CloseResult_Clicked"
+                            Margin="0,10,0,0"/>
+                </VerticalStackLayout>
+            </Frame>
+
+        </VerticalStackLayout>
+
+        <VerticalStackLayout Grid.Row="1" Spacing="10">
+            <Label Text="{Binding ErrorMessage}"
+                   TextColor="Red"
+                   HorizontalTextAlignment="Center"
+                   IsVisible="{Binding HasError}" />
+
+            <Button Command="{Binding RedeemBoxCommand}"
+                    Text="100 Puana Kutu Aç!"
+                    IsEnabled="{Binding CanRedeem}"
+                    HeightRequest="50" />
+        </VerticalStackLayout>
+
+        <ActivityIndicator IsRunning="{Binding IsLoading}" 
+                           VerticalOptions="Center" 
+                           HorizontalOptions="Center" />
+    </Grid>
+</ContentPage>

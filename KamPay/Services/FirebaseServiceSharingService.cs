@@ -2,27 +2,32 @@ using Firebase.Database;
 using Firebase.Database.Query;
 using KamPay.Models;
 using KamPay.Helpers;
+using System; // Bu satýrý ekleyin
+using System.Collections.Generic; // Bu satýrý ekleyin
+using System.Linq; // Bu satýrý ekleyin
+using System.Threading.Tasks; // Bu satýrý ekleyin
 
 namespace KamPay.Services
 {
     public class FirebaseServiceSharingService : IServiceSharingService
     {
         private readonly FirebaseClient _firebaseClient;
-        private const string ServiceOffersCollection = "service_offers";
-        private const string ServiceRequestsCollection = "service_requests";
+        private readonly INotificationService _notificationService; // Bildirim servisini ekleyin
 
-        public FirebaseServiceSharingService()
+        // Constructor'ý INotificationService alacak þekilde güncelleyin
+        public FirebaseServiceSharingService(INotificationService notificationService)
         {
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
+            _notificationService = notificationService;
         }
 
-        // Hizmet oluþturma 
+        // ... CreateServiceOfferAsync ve GetServiceOffersAsync metotlarý ayný kalacak ...
         public async Task<ServiceResult<ServiceOffer>> CreateServiceOfferAsync(ServiceOffer offer)
         {
             try
             {
                 await _firebaseClient
-                    .Child(ServiceOffersCollection)
+                    .Child(Constants.ServiceOffersCollection)
                     .Child(offer.ServiceId)
                     .PutAsync(offer);
 
@@ -34,13 +39,12 @@ namespace KamPay.Services
             }
         }
 
-        // === Hizmetleri listeleme ===
         public async Task<ServiceResult<List<ServiceOffer>>> GetServiceOffersAsync(ServiceCategory? category = null)
         {
             try
             {
                 var allOffers = await _firebaseClient
-                    .Child(ServiceOffersCollection)
+                    .Child(Constants.ServiceOffersCollection)
                     .OnceAsync<ServiceOffer>();
 
                 var offers = allOffers
@@ -57,57 +61,96 @@ namespace KamPay.Services
             }
         }
 
-        // === Hizmet talebi oluþturma ===
-        public async Task<ServiceResult<ServiceRequest>> RequestServiceAsync(string serviceId, User requester, string message)
+        // --- YENÝ IMPLEMENTE EDÝLEN METOTLAR ---
+
+        public async Task<ServiceResult<ServiceRequest>> RequestServiceAsync(ServiceOffer offer, User requester, string message)
         {
             try
             {
                 var request = new ServiceRequest
                 {
-                    ServiceId = serviceId,
+                    ServiceId = offer.ServiceId,
+                    ServiceTitle = offer.Title,
+                    ProviderId = offer.ProviderId,
                     RequesterId = requester.UserId,
                     RequesterName = requester.FullName,
                     Message = message
                 };
 
                 await _firebaseClient
-                    .Child(ServiceRequestsCollection)
+                    .Child(Constants.ServiceRequestsCollection)
                     .Child(request.RequestId)
                     .PutAsync(request);
 
-                return ServiceResult<ServiceRequest>.SuccessResult(request, "Talep gönderildi");
+                // Hizmeti sunan kiþiye bildirim gönder
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserId = offer.ProviderId,
+                    Type = NotificationType.NewOffer, // Bu tipi genel teklifler için kullanabiliriz
+                    Title = "Yeni Hizmet Talebi",
+                    Message = $"{requester.FullName}, '{offer.Title}' hizmetin için bir talep gönderdi.",
+                    ActionUrl = "///ProfilePage" // Þimdilik profile yönlendirelim
+                });
+
+                return ServiceResult<ServiceRequest>.SuccessResult(request, "Talebiniz baþarýyla gönderildi.");
             }
             catch (Exception ex)
             {
-                return ServiceResult<ServiceRequest>.FailureResult("Hata", ex.Message);
+                return ServiceResult<ServiceRequest>.FailureResult("Talep gönderilirken hata oluþtu.", ex.Message);
             }
         }
 
-        // === Hizmet talebine yanýt verme ===
+        // Bu metot þu an kullanýlmýyor ama ileride "Taleplerim" sayfasý için gerekecek.
+        public async Task<ServiceResult<List<ServiceRequest>>> GetMyServiceRequestsAsync(string userId)
+        {
+            try
+            {
+                var requests = await _firebaseClient
+                    .Child(Constants.ServiceRequestsCollection)
+                    .OrderBy("ProviderId")
+                    .EqualTo(userId)
+                    .OnceAsync<ServiceRequest>();
+
+                var list = requests.Select(r => r.Object).OrderByDescending(r => r.RequestedAt).ToList();
+                return ServiceResult<List<ServiceRequest>>.SuccessResult(list);
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<List<ServiceRequest>>.FailureResult("Talepler alýnamadý.", ex.Message);
+            }
+        }
+
+        // Bu metot þu an kullanýlmýyor ama ileride talepleri yanýtlarken gerekecek.
         public async Task<ServiceResult<bool>> RespondToRequestAsync(string requestId, bool accept)
         {
             try
             {
-                var request = await _firebaseClient
-                    .Child(ServiceRequestsCollection)
-                    .Child(requestId)
-                    .OnceSingleAsync<ServiceRequest>();
+                var requestNode = _firebaseClient.Child(Constants.ServiceRequestsCollection).Child(requestId);
+                var request = await requestNode.OnceSingleAsync<ServiceRequest>();
 
-                if (request != null)
+                if (request == null)
                 {
-                    request.Status = accept ? ServiceRequestStatus.Accepted : ServiceRequestStatus.Declined;
-
-                    await _firebaseClient
-                        .Child(ServiceRequestsCollection)
-                        .Child(requestId)
-                        .PutAsync(request);
+                    return ServiceResult<bool>.FailureResult("Talep bulunamadý.");
                 }
 
-                return ServiceResult<bool>.SuccessResult(true);
+                request.Status = accept ? ServiceRequestStatus.Accepted : ServiceRequestStatus.Declined;
+                await requestNode.PutAsync(request);
+
+                // Talebi gönderen kiþiye bildirim gönder
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserId = request.RequesterId,
+                    Type = accept ? NotificationType.OfferAccepted : NotificationType.OfferRejected,
+                    Title = accept ? "Hizmet Talebin Onaylandý!" : "Hizmet Talebin Reddedildi",
+                    Message = $"'{request.ServiceTitle}' hizmeti için talebin {(accept ? "kabul edildi." : "reddedildi.")}",
+                    ActionUrl = "///ServiceSharingPage"
+                });
+
+                return ServiceResult<bool>.SuccessResult(true, "Talep yanýtlandý.");
             }
             catch (Exception ex)
             {
-                return ServiceResult<bool>.FailureResult("Hata", ex.Message);
+                return ServiceResult<bool>.FailureResult("Ýþlem sýrasýnda hata oluþtu.", ex.Message);
             }
         }
     }

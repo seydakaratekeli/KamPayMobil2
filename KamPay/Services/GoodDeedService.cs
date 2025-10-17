@@ -1,4 +1,7 @@
-using Firebase.Database;
+/*gereksizse sil
+ * 
+ * 
+ * using Firebase.Database;
 using Firebase.Database.Query;
 using KamPay.Models;
 using System;
@@ -114,3 +117,4 @@ namespace KamPay.Services
         }
     }
 }
+*/

@@ -1,9 +1,11 @@
 using KamPay.Models;
+using System.Threading.Tasks;
 
-namespace KamPay.Services;
-public interface ISurpriseBoxService
+namespace KamPay.Services
 {
-    Task<ServiceResult<SurpriseBox>> CreateSurpriseBoxAsync(string productId, User donor);
-    Task<ServiceResult<SurpriseBox>> OpenRandomBoxAsync(string userId);
-    Task<ServiceResult<List<SurpriseBox>>> GetAvailableBoxesAsync();
+    public interface ISurpriseBoxService
+    {
+        // Bu arayüz artýk sadece bu tek metodu içermeli
+        Task<ServiceResult<Product>> RedeemSurpriseBoxAsync(string userId);
+    }
 }

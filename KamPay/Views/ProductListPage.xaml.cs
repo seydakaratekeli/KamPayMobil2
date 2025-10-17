@@ -13,4 +13,13 @@ public partial class ProductListPage : ContentPage
     {
         await Shell.Current.GoToAsync("..");
     }
+    // KamPay/Views/ProductListPage.xaml.cs
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        if (BindingContext is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
+    }
 }

@@ -21,8 +21,12 @@ namespace KamPay
             Routing.RegisterRoute(nameof(TradeOfferView), typeof(TradeOfferView));
             Routing.RegisterRoute(nameof(GoodDeedBoardPage), typeof(GoodDeedBoardPage));
             Routing.RegisterRoute(nameof(ServiceSharingPage), typeof(ServiceSharingPage));
-            Routing.RegisterRoute(nameof(QRCodeDisplayPage), typeof(QRCodeDisplayPage)); 
+            Routing.RegisterRoute(nameof(QRCodeDisplayPage), typeof(QRCodeDisplayPage));
+            Routing.RegisterRoute(nameof(ServiceRequestsPage), typeof(ServiceRequestsPage)); // Bu satırı ekleyin
             Routing.RegisterRoute("qrscanner", typeof(QRScannerPage));
+            Routing.RegisterRoute(nameof(ServiceRequestsPage), typeof(ServiceRequestsPage));
+            Routing.RegisterRoute(nameof(SurpriseBoxPage), typeof(SurpriseBoxPage)); // Bu satırı ekleyin
+
         }
     }
 }

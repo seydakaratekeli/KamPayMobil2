@@ -2,112 +2,91 @@
 using CommunityToolkit.Mvvm.Input;
 using KamPay.Models;
 using KamPay.Services;
+using System;
+using System.Threading.Tasks;
 
 namespace KamPay.ViewModels
 {
     public partial class SurpriseBoxViewModel : ObservableObject
     {
         private readonly ISurpriseBoxService _surpriseBoxService;
-        private readonly IAuthenticationService _authService;
-
-        [ObservableProperty]
-        private int availableBoxCount;
+        private readonly IAuthenticationService _authenticationService;
 
         [ObservableProperty]
         private bool isLoading;
 
         [ObservableProperty]
-        private SurpriseBox? lastOpenedBox;
+        [NotifyPropertyChangedFor(nameof(HasError))]
+        private string errorMessage;
 
-        public SurpriseBoxViewModel(ISurpriseBoxService surpriseBoxService, IAuthenticationService authService)
+        [ObservableProperty]
+        private Product redemptionResult;
+
+        [ObservableProperty]
+        private bool canRedeem = true;
+
+        public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
+
+        // Event for the View to subscribe to
+        public event EventHandler<bool> RedemptionCompleted;
+
+        public SurpriseBoxViewModel(ISurpriseBoxService surpriseBoxService, IAuthenticationService authenticationService)
         {
             _surpriseBoxService = surpriseBoxService;
-            _authService = authService;
-            LoadAvailableCountAsync();
-        }
-
-        private async void LoadAvailableCountAsync()
-        {
-            var result = await _surpriseBoxService.GetAvailableBoxesAsync();
-            if (result.Success)
-            {
-                AvailableBoxCount = result.Data.Count;
-            }
+            _authenticationService = authenticationService;
         }
 
         [RelayCommand]
-        private async Task OpenSurpriseBoxAsync()
+        private async Task RedeemBoxAsync()
         {
+            if (IsLoading) return;
+
             try
             {
                 IsLoading = true;
+                CanRedeem = false;
+                ErrorMessage = string.Empty;
 
-                var currentUser = await _authService.GetCurrentUserAsync();
-                var result = await _surpriseBoxService.OpenRandomBoxAsync(currentUser.UserId);
-
-                if (result.Success)
+                var user = await _authenticationService.GetCurrentUserAsync();
+                if (user == null)
                 {
-                    LastOpenedBox = result.Data;
-                    AvailableBoxCount--;
+                    ErrorMessage = "Lütfen giriş yapın.";
+                    RedemptionCompleted?.Invoke(this, false);
+                    return;
+                }
 
-                    await Application.Current.MainPage.DisplayAlert(
-                        "🎁 Tebrikler!",
-                        $"{result.Message}\n\nBağışlayan: {result.Data.DonorName}",
-                        "Harika!"
-                    );
+                var result = await _surpriseBoxService.RedeemSurpriseBoxAsync(user.UserId);
+
+                if (result.Success && result.Data != null)
+                {
+                    RedemptionResult = result.Data;
+                    RedemptionCompleted?.Invoke(this, true);
                 }
                 else
                 {
-                    await Application.Current.MainPage.DisplayAlert("Bilgi", result.Message, "Tamam");
+                    ErrorMessage = result.Message;
+                    RedemptionCompleted?.Invoke(this, false);
                 }
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
+                ErrorMessage = "Beklenmedik bir hata oluştu.";
+                RedemptionCompleted?.Invoke(this, false);
             }
             finally
             {
                 IsLoading = false;
+                // 'CanRedeem'i burada true yapmıyoruz,
+                // kullanıcı sonuç ekranını kapattığında ResetCommand ile yapacağız.
             }
         }
 
         [RelayCommand]
-        private async Task CreateSurpriseBoxAsync(string productId)
+        private void Reset()
         {
-            try
-            {
-                var confirm = await Application.Current.MainPage.DisplayAlert(
-                    "Sürpriz Bağış",
-                    "Bu ürünü sürpriz kutuya eklemek ister misiniz?\nRastgele bir öğrenci bu hediyeyi alacak.",
-                    "Evet",
-                    "Hayır"
-                );
-
-                if (!confirm) return;
-
-                IsLoading = true;
-
-                var currentUser = await _authService.GetCurrentUserAsync();
-                var result = await _surpriseBoxService.CreateSurpriseBoxAsync(productId, currentUser);
-
-                if (result.Success)
-                {
-                    await Application.Current.MainPage.DisplayAlert("Başarılı", result.Message, "Tamam");
-                    AvailableBoxCount++;
-                }
-                else
-                {
-                    await Application.Current.MainPage.DisplayAlert("Hata", result.Message, "Tamam");
-                }
-            }
-            catch (Exception ex)
-            {
-                await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
-            }
-            finally
-            {
-                IsLoading = false;
-            }
+            ErrorMessage = string.Empty;
+            RedemptionResult = null;
+            CanRedeem = true;
         }
     }
 }

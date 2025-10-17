@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System;
 using KamPay.Models;
 using KamPay.Services;
+using System.Collections.Generic; // Bu using ifadesini ekleyin
 
 namespace KamPay.ViewModels
 {
@@ -47,12 +48,11 @@ namespace KamPay.ViewModels
             try
             {
                 IsLoading = true;
-
+                Services.Clear(); // Koleksiyonu temizle
                 var result = await _serviceService.GetServiceOffersAsync();
 
                 if (result.Success && result.Data != null)
                 {
-                    Services.Clear();
                     foreach (var service in result.Data)
                     {
                         Services.Add(service);
@@ -72,6 +72,7 @@ namespace KamPay.ViewModels
         [RelayCommand]
         private async Task CreateServiceAsync()
         {
+            // ... Bu metot aynı kalacak ...
             try
             {
                 if (string.IsNullOrWhiteSpace(ServiceTitle) || string.IsNullOrWhiteSpace(ServiceDescription))
@@ -124,62 +125,63 @@ namespace KamPay.ViewModels
             }
         }
 
+        // --- YENİ EKLENEN KOMUT ---
         [RelayCommand]
-        private async Task RequestServiceAsync(ServiceOffer service)
+        private async Task RequestServiceAsync(ServiceOffer offer)
         {
+            if (offer == null) return;
+
+            var currentUser = await _authService.GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                await Application.Current.MainPage.DisplayAlert("Hata", "Bu işlem için giriş yapmalısınız.", "Tamam");
+                return;
+            }
+
+            // Kullanıcının kendi hizmetini talep etmesini engelle
+            if (offer.ProviderId == currentUser.UserId)
+            {
+                await Application.Current.MainPage.DisplayAlert("Bilgi", "Kendi hizmetinizi talep edemezsiniz.", "Tamam");
+                return;
+            }
+
             try
             {
-                if (service == null) return;
-
                 var message = await Application.Current.MainPage.DisplayPromptAsync(
                     "Hizmet Talebi",
-                    "Mesajınız:",
-                    placeholder: "Merhaba, hizmetinizden yararlanmak istiyorum..."
+                    $"'{offer.Title}' hizmeti için talebinizi iletin:",
+                    "Gönder",
+                    "İptal",
+                    "Merhaba, bu hizmetinizden yararlanmak istiyorum."
                 );
 
-                if (string.IsNullOrWhiteSpace(message)) return;
+                if (string.IsNullOrWhiteSpace(message)) return; // Kullanıcı iptal etti veya boş mesaj gönderdi
 
-                var currentUser = await _authService.GetCurrentUserAsync();
-                if (currentUser == null)
-                {
-                    await Application.Current.MainPage.DisplayAlert("Hata", "Giriş yapılmamış", "Tamam");
-                    return;
-                }
+                IsLoading = true;
 
-                var result = await _serviceService.RequestServiceAsync(service.ServiceId, currentUser, message);
+                var result = await _serviceService.RequestServiceAsync(offer, currentUser, message);
 
                 if (result.Success)
                 {
                     await Application.Current.MainPage.DisplayAlert(
                         "Başarılı",
-                        "Talebiniz gönderildi! Hizmet sağlayıcı sizinle iletişime geçecek.",
+                        result.Message,
                         "Tamam"
                     );
                 }
                 else
                 {
-                    await Application.Current.MainPage.DisplayAlert("Hata", result.Message ?? "Talep gönderilemedi", "Tamam");
+                    await Application.Current.MainPage.DisplayAlert("Hata", result.Message ?? "Talep gönderilemedi.", "Tamam");
                 }
             }
             catch (Exception ex)
             {
                 await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
             }
-        }
-
-        public string GetCategoryName(ServiceCategory category)
-        {
-            return category switch
+            finally
             {
-                ServiceCategory.Education => "📚 Eğitim",
-                ServiceCategory.Technical => "💻 Teknik",
-                ServiceCategory.Cooking => "🍳 Yemek",
-                ServiceCategory.Childcare => "👶 Çocuk Bakımı",
-                ServiceCategory.PetCare => "🐕 Evcil Hayvan",
-                ServiceCategory.Translation => "🌐 Çeviri",
-                ServiceCategory.Moving => "📦 Taşıma",
-                _ => "📌 Diğer"
-            };
+                IsLoading = false;
+            }
         }
     }
 }
