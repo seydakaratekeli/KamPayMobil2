@@ -9,17 +9,6 @@ using KamPay.Models;
 
 namespace KamPay.Services
 {
-    // YENİ: Puan verilecek eylemleri tanımlayan enum.
-    // Sınıfın dışında ama namespace'in içinde tanımlamak iyi bir pratiktir.
-    public enum UserAction
-    {
-        AddProduct,
-        MakeDonation,
-        ReceiveBadge,
-        CompleteTransaction, // Başarılı bir takas/satış tamamlama
-        ReceiveDonation      // Bir bağışı teslim alma
-    }
-
     public class FirebaseUserProfileService : IUserProfileService
     {
         private readonly FirebaseClient _firebaseClient;
@@ -29,7 +18,96 @@ namespace KamPay.Services
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
         }
 
-        // YENİ: Belirli bir eylem için puan ekleyen ana metot.
+        // --- YENİ EKLENEN PROFİL YÖNETİM METOTLARI ---
+
+        /// <summary>
+        /// Yeni kullanıcı için veritabanında profil ve başlangıç istatistiklerini oluşturur.
+        /// </summary>
+        public async Task<ServiceResult<bool>> CreateUserProfileAsync(string userId, string username, string email)
+        {
+            try
+            {
+                // 1. user_profiles koleksiyonuna yaz
+                var userProfile = new UserProfile
+                {
+                    UserId = userId,
+                    Username = username,
+                    Email = email,
+                    ProfileImageUrl = "", // Varsayılan veya boş profil resmi
+                    MemberSince = DateTime.UtcNow
+                };
+                await _firebaseClient.Child("user_profiles").Child(userId).PutAsync(userProfile);
+
+                // 2. user_stats koleksiyonuna yaz
+                var userStats = new UserStats
+                {
+                    UserId = userId,
+                    Points = 0, // Başlangıç puanı
+                    CompletedTrades = 0,
+                    DonationsMade = 0,
+                    ItemsShared = 0
+                    // Diğer istatistik alanları varsayılan olarak 0 olacak
+                };
+                await _firebaseClient.Child("user_stats").Child(userId).PutAsync(userStats);
+
+                return ServiceResult<bool>.SuccessResult(true, "Kullanıcı profili başarıyla oluşturuldu.");
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<bool>.FailureResult("Profil oluşturulamadı.", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Belirtilen kullanıcının genel profil bilgilerini getirir.
+        /// </summary>
+        public async Task<ServiceResult<UserProfile>> GetUserProfileAsync(string userId)
+        {
+            try
+            {
+                var profile = await _firebaseClient
+                    .Child("user_profiles")
+                    .Child(userId)
+                    .OnceSingleAsync<UserProfile>();
+
+                if (profile == null)
+                {
+                    return ServiceResult<UserProfile>.FailureResult("Kullanıcı profili bulunamadı.");
+                }
+                return ServiceResult<UserProfile>.SuccessResult(profile);
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<UserProfile>.FailureResult("Profil yüklenemedi.", ex.Message);
+            }
+        }
+
+
+        // --- MEVCUT OYUNLAŞTIRMA METOTLARINIZ (GÜNCELLENMİŞ HALİYLE) ---
+
+        public async Task<ServiceResult<UserStats>> GetUserStatsAsync(string userId)
+        {
+            try
+            {
+                var stats = await _firebaseClient
+                    .Child("user_stats") // Constants.UserStatsCollection yerine doğrudan string kullandım, kendi projenize göre değiştirebilirsiniz.
+                    .Child(userId)
+                    .OnceSingleAsync<UserStats>();
+
+                if (stats == null)
+                {
+                    // Eğer istatistik yoksa, yeni bir tane oluşturup döndürelim.
+                    stats = new UserStats { UserId = userId };
+                    await _firebaseClient.Child("user_stats").Child(userId).PutAsync(stats);
+                }
+                return ServiceResult<UserStats>.SuccessResult(stats);
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<UserStats>.FailureResult("İstatistikler yüklenemedi", ex.Message);
+            }
+        }
+
         public async Task<ServiceResult<bool>> AddPointsForAction(string userId, UserAction action)
         {
             int points = GetPointsForAction(action);
@@ -39,93 +117,49 @@ namespace KamPay.Services
             {
                 return await AddPointsAsync(userId, points, reason);
             }
-
             return ServiceResult<bool>.SuccessResult(true, "Bu eylem için puan tanımlanmamış.");
         }
 
-        // YENİ: Hangi eylemin kaç puan kazandıracağını belirleyen yardımcı metot.
-        private int GetPointsForAction(UserAction action)
-        {
-            return action switch
-            {
-                UserAction.AddProduct => 10,
-                UserAction.MakeDonation => 50,
-                UserAction.CompleteTransaction => 25, // Başarılı takas için 25 puan
-                UserAction.ReceiveDonation => 10,   // Bağış teslim alındığı için 10 puan
-                _ => 0
-            };
-        }
-
-        // YENİ: Puan kazanma nedenini bildirimlerde göstermek için metin döndüren yardımcı metot.
-        private string GetReasonForAction(UserAction action)
-        {
-            return action switch
-            {
-                UserAction.AddProduct => "Yeni ürün ekledin.",
-                UserAction.MakeDonation => "Değerli bir bağış yaptın.",
-                UserAction.CompleteTransaction => "Başarılı bir takas/satış tamamladın.",
-                UserAction.ReceiveDonation => "Bir bağışı teslim aldın.",
-                _ => "Genel aktivite."
-            };
-        }
-
-        // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
-        public async Task<ServiceResult<UserStats>> GetUserStatsAsync(string userId)
+        public async Task<ServiceResult<bool>> AddPointsAsync(string userId, int points, string reason)
         {
             try
             {
-                var stats = await _firebaseClient
-                    .Child(Constants.UserStatsCollection)
-                    .Child(userId)
-                    .OnceSingleAsync<UserStats>();
-
-                if (stats == null)
+                var statsResult = await GetUserStatsAsync(userId);
+                if (!statsResult.Success)
                 {
-                    var user = await _firebaseClient
-                        .Child(Constants.UsersCollection)
-                        .Child(userId)
-                        .OnceSingleAsync<User>();
-
-                    stats = new UserStats
-                    {
-                        UserId = userId,
-                        MemberSince = user?.CreatedAt ?? DateTime.UtcNow
-                    };
-
-                    await _firebaseClient
-                        .Child(Constants.UserStatsCollection)
-                        .Child(userId)
-                        .PutAsync(stats);
+                    return ServiceResult<bool>.FailureResult("Puan eklenemedi: İstatistikler alınamadı.");
                 }
+                var stats = statsResult.Data;
+                stats.Points += points; // DÜZELTİLDİ
 
-                return ServiceResult<UserStats>.SuccessResult(stats);
+                await UpdateUserStatsAsync(stats);
+
+                // Puan kazandıktan sonra rozet kontrolü yap
+                await CheckAndAwardBadgesAsync(userId);
+
+                return ServiceResult<bool>.SuccessResult(true, $"+{points} puan kazanıldı.");
             }
             catch (Exception ex)
             {
-                return ServiceResult<UserStats>.FailureResult("İstatistikler yüklenemedi", ex.Message);
+                return ServiceResult<bool>.FailureResult("Puan eklenemedi", ex.Message);
             }
         }
 
-        // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
         public async Task<ServiceResult<bool>> UpdateUserStatsAsync(UserStats stats)
         {
             try
             {
-                stats.LastActivityAt = DateTime.UtcNow;
-
                 await _firebaseClient
-                    .Child(Constants.UserStatsCollection)
+                    .Child("user_stats")
                     .Child(stats.UserId)
                     .PutAsync(stats);
-
                 return ServiceResult<bool>.SuccessResult(true);
             }
             catch (Exception ex)
             {
-                return ServiceResult<bool>.FailureResult("Güncellenemedi", ex.Message);
+                return ServiceResult<bool>.FailureResult("İstatistikler güncellenemedi", ex.Message);
             }
         }
-
         // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
         public async Task<ServiceResult<List<UserBadge>>> GetUserBadgesAsync(string userId)
         {
@@ -207,46 +241,7 @@ namespace KamPay.Services
             }
         }
 
-        // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
-        public async Task<ServiceResult<bool>> AddPointsAsync(string userId, int points, string reason)
-        {
-            try
-            {
-                var statsResult = await GetUserStatsAsync(userId);
-                if (!statsResult.Success)
-                {
-                    return ServiceResult<bool>.FailureResult("İstatistikler alınamadı");
-                }
-
-                var stats = statsResult.Data;
-                stats.DonationPoints += points;
-
-                await UpdateUserStatsAsync(stats);
-
-                var notification = new Notification
-                {
-                    UserId = userId,
-                    Type = NotificationType.PointsEarned,
-                    Title = "⭐ Puan Kazandın!",
-                    Message = $"{points} puan kazandın! Toplam: {stats.DonationPoints} puan\nNeden: {reason}",
-                    RelatedEntityType = "Points"
-                };
-
-                await _firebaseClient
-                    .Child(Constants.NotificationsCollection)
-                    .Child(notification.NotificationId)
-                    .PutAsync(notification);
-
-                await CheckAndAwardBadgesAsync(userId);
-
-                return ServiceResult<bool>.SuccessResult(true, $"+{points} puan");
-            }
-            catch (Exception ex)
-            {
-                return ServiceResult<bool>.FailureResult("Puan eklenemedi", ex.Message);
-            }
-        }
-
+       
         // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
         public async Task<ServiceResult<bool>> CheckAndAwardBadgesAsync(string userId)
         {
@@ -285,7 +280,7 @@ namespace KamPay.Services
                             shouldAward = stats.DonatedProducts >= badge.RequiredCount;
                             break;
                         case BadgeCategory.Points:
-                            shouldAward = stats.DonationPoints >= badge.RequiredPoints;
+                            shouldAward = stats.Points >= badge.RequiredPoints; // DÜZELTİLDİ
                             break;
                     }
 
@@ -306,6 +301,31 @@ namespace KamPay.Services
             {
                 return ServiceResult<bool>.FailureResult("Kontrol edilemedi", ex.Message);
             }
+        }
+
+
+        private int GetPointsForAction(UserAction action)
+        {
+            return action switch
+            {
+                UserAction.AddProduct => 10,
+                UserAction.MakeDonation => 50,
+                UserAction.CompleteTransaction => 25,
+                UserAction.ReceiveDonation => 10,
+                _ => 0
+            };
+        }
+
+        private string GetReasonForAction(UserAction action)
+        {
+            return action switch
+            {
+                UserAction.AddProduct => "Yeni ürün ekledin.",
+                UserAction.MakeDonation => "Değerli bir bağış yaptın.",
+                UserAction.CompleteTransaction => "Başarılı bir takas/satış tamamladın.",
+                UserAction.ReceiveDonation => "Bir bağışı teslim aldın.",
+                _ => "Genel aktivite."
+            };
         }
     }
 }

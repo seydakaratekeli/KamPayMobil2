@@ -80,7 +80,7 @@
                                        BackgroundColor="White">
                                     <VerticalStackLayout HorizontalOptions="Center"
                                                         Spacing="5">
-                                        <Label Text="{Binding UserStats.DonationPoints}"
+                                        <Label Text="{Binding UserStats.Points}"
                                                FontSize="24"
                                                FontAttributes="Bold"
                                                TextColor="#FF9800"

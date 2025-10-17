@@ -4,27 +4,58 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="KamPay.Views.LoginPage"
     Title="KamPay - Giriş">
+
     <ScrollView>
         <VerticalStackLayout Padding="20" Spacing="12">
 
-            <!-- 💡 DEMO KULLANICI BİLGİSİ -->
-            <Frame Padding="15"
-                   CornerRadius="10"
-                   BorderColor="#E0E0E0"
-                   BackgroundColor="#F5F5F5">
-                <VerticalStackLayout Spacing="5">
-                    <Label Text="💡 Demo Kullanıcı Bilgileri"
-                           FontAttributes="Bold"
-                           TextColor="#333"
-                           FontSize="14" />
-                    <Label Text="E-posta: test@bartin.edu.tr"
-                           FontSize="13"
-                           TextColor="#555" />
-                    <Label Text="Şifre: Test1234"
-                           FontSize="13"
-                           TextColor="#555" />
-                </VerticalStackLayout>
-            </Frame>
+            <!-- 💡 DEMO KULLANICI BİLGİLERİ -->
+            <Label Text="💡 Demo Kullanıcı Bilgileri"
+                   FontAttributes="Bold"
+                   TextColor="#333"
+                   FontSize="14"
+                   HorizontalOptions="Center" />
+
+            <HorizontalStackLayout Spacing="10">
+                <!-- Demo Kullanıcı 1 -->
+                <Frame Padding="10"
+                       CornerRadius="10"
+                       BorderColor="#E0E0E0"
+                       BackgroundColor="#F5F5F5"
+                       WidthRequest="160">
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="👤 Kullanıcı 1"
+                               FontAttributes="Bold"
+                               TextColor="#333"
+                               FontSize="14" />
+                        <Label Text="E-posta: Ahmetakar@bartin.edu.tr"
+                               FontSize="13"
+                               TextColor="#555" />
+                        <Label Text="Şifre: Ahmet1234"
+                               FontSize="13"
+                               TextColor="#555" />
+                    </VerticalStackLayout>
+                </Frame>
+
+                <!-- Demo Kullanıcı 2 -->
+                <Frame Padding="10"
+                       CornerRadius="10"
+                       BorderColor="#E0E0E0"
+                       BackgroundColor="#F5F5F5"
+                       WidthRequest="160">
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="👤 Kullanıcı 2"
+                               FontAttributes="Bold"
+                               TextColor="#333"
+                               FontSize="14" />
+                        <Label Text="E-posta: Ayseguler@bartin.edu.tr"
+                               FontSize="13"
+                               TextColor="#555" />
+                        <Label Text="Şifre: Ayse1234"
+                               FontSize="13"
+                               TextColor="#555" />
+                    </VerticalStackLayout>
+                </Frame>
+            </HorizontalStackLayout>
 
             <Label Text="Giriş Yap" FontSize="24" HorizontalOptions="Center" />
 
@@ -36,12 +67,17 @@
                 <Label Text="Beni hatırla" VerticalOptions="Center" />
             </HorizontalStackLayout>
 
-            <Label Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage}" TextColor="Red" />
+            <Label Text="{Binding ErrorMessage}" 
+                   IsVisible="{Binding ErrorMessage}" 
+                   TextColor="Red" />
 
             <Button Text="Giriş Yap" Command="{Binding LoginCommand}" />
             <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" />
 
-            <Button Text="Hesabın yok mu? Kayıt ol" Command="{Binding GoToRegisterCommand}" BackgroundColor="Transparent" TextColor="Blue" />
+            <Button Text="Hesabın yok mu? Kayıt ol" 
+                    Command="{Binding GoToRegisterCommand}" 
+                    BackgroundColor="Transparent" 
+                    TextColor="Blue" />
 
         </VerticalStackLayout>
     </ScrollView>

@@ -24,7 +24,12 @@ namespace KamPay.ViewModels
         {
             _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         }
-
+        public void ClearCredentials()
+        {
+            Email = string.Empty;
+            Password = string.Empty;
+            ErrorMessage = string.Empty;
+        }
         [RelayCommand]
         private async Task LoginAsync()
         {
@@ -48,6 +53,7 @@ namespace KamPay.ViewModels
 
                     // Ana sayfaya yönlendir ()
                     await Shell.Current.GoToAsync("//MainApp");
+                    ClearCredentials();
                 }
                 else
                 {

@@ -14,7 +14,6 @@
     </ContentPage.Resources>
 
     <Grid RowDefinitions="Auto, *">
-        <!-- Tab Buttons -->
         <Grid Grid.Row="0" ColumnDefinitions="*,*" Padding="15,10" ColumnSpacing="10">
             <Button Grid.Column="0" Text="Gelen Teklifler" Command="{Binding SelectIncomingCommand}">
                 <Button.Style>
@@ -48,87 +47,96 @@
             </Button>
         </Grid>
 
-        <!-- Loading Indicator -->
-        <ActivityIndicator Grid.Row="1" 
-                          IsRunning="{Binding IsLoading}" 
-                          IsVisible="{Binding IsLoading}" 
-                          VerticalOptions="Center" 
-                          HorizontalOptions="Center"/>
+        <RefreshView Grid.Row="1" 
+                     Command="{Binding RefreshOffersCommand}" 
+                     IsRefreshing="{Binding IsRefreshing}">
+            <ScrollView>
+                <VerticalStackLayout>
 
-        <!-- Gelen Teklifler (Incoming Offers) -->
-        <CollectionView Grid.Row="1" 
-                       ItemsSource="{Binding IncomingOffers}" 
-                       IsVisible="{Binding IsIncomingSelected}">
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="models:Transaction">
-                    <Frame Margin="15,5" Padding="15" BorderColor="{StaticResource Gray300}">
-                        <VerticalStackLayout Spacing="8">
-                            <Label FontAttributes="Bold" Text="{Binding ProductTitle, StringFormat='Talep Edilen Ürün: {0}'}"/>
-                            <Label Text="{Binding BuyerName, StringFormat='Teklif Eden: {0}'}"/>
-                            <Label Text="{Binding OfferMessage, StringFormat='Mesaj: {0}'}" 
-                                   IsVisible="{Binding OfferMessage, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
-                            <Label Text="{Binding OfferedProductTitle, StringFormat='Teklif Edilen Ürün: {0}'}" 
-                                   IsVisible="{Binding OfferedProductTitle, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
+                    <ActivityIndicator IsRunning="{Binding IsLoading}" 
+                                       IsVisible="{Binding IsLoading}" 
+                                       VerticalOptions="Center" 
+                                       HorizontalOptions="Center"
+                                       Margin="0,20,0,0"/>
 
-                            <HorizontalStackLayout Spacing="10" 
-                                                  IsVisible="{Binding Status, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static models:TransactionStatus.Pending}}">
-                                <Button Text="Onayla" 
-                                       Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=AcceptOfferCommand}" 
-                                       CommandParameter="{Binding .}" 
-                                       BackgroundColor="{StaticResource Primary}"/>
-                                <Button Text="Reddet" 
-                                       Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=RejectOfferCommand}" 
-                                       CommandParameter="{Binding .}" 
-                                       BackgroundColor="{StaticResource Danger}"/>
-                            </HorizontalStackLayout>
+                    <CollectionView ItemsSource="{Binding IncomingOffers}" 
+                                    IsVisible="{Binding IsIncomingSelected}">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Transaction">
+                                <Frame Margin="15,5" Padding="15" BorderColor="{StaticResource Gray300}">
+                                    <VerticalStackLayout Spacing="8">
+                                        <Label FontAttributes="Bold" Text="{Binding ProductTitle, StringFormat='Talep Edilen Ürün: {0}'}"/>
+                                        <Label Text="{Binding BuyerName, StringFormat='Teklif Eden: {0}'}"/>
+                                        <Label Text="{Binding OfferMessage, StringFormat='Mesaj: {0}'}" 
+                                               IsVisible="{Binding OfferMessage, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
+                                        <Label Text="{Binding OfferedProductTitle, StringFormat='Teklif Edilen Ürün: {0}'}" 
+                                               IsVisible="{Binding OfferedProductTitle, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
 
-                            <Grid ColumnDefinitions="*,Auto" 
-                                  IsVisible="{Binding Status, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static models:TransactionStatus.Accepted}}">
-                                <Label Grid.Column="0" 
-                                      Text="KABUL EDİLDİ" 
-                                      TextColor="{StaticResource Primary}" 
-                                      FontAttributes="Bold" 
-                                      VerticalOptions="Center"/>
-                                <Button Grid.Column="1" 
-                                       Text="Teslimatı Yönet" 
-                                       Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=ManageDeliveryCommand}" 
-                                       CommandParameter="{Binding .}" />
-                            </Grid>
+                                        <HorizontalStackLayout Spacing="10" 
+                                                               IsVisible="{Binding Status, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static models:TransactionStatus.Pending}}">
+                                            <Button Text="Onayla" 
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=AcceptOfferCommand}" 
+                                                    CommandParameter="{Binding .}" 
+                                                    BackgroundColor="{StaticResource Primary}"/>
+                                            <Button Text="Reddet" 
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=RejectOfferCommand}" 
+                                                    CommandParameter="{Binding .}" 
+                                                    BackgroundColor="{StaticResource Danger}"/>
+                                        </HorizontalStackLayout>
 
-                            <Label Text="REDDEDİLDİ" 
-                                   TextColor="{StaticResource Danger}" 
-                                   FontAttributes="Bold" 
-                                   IsVisible="{Binding Status, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static models:TransactionStatus.Rejected}}"/>
-                        </VerticalStackLayout>
-                    </Frame>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+                                        <Grid ColumnDefinitions="*,Auto" 
+                                              IsVisible="{Binding CanManageDelivery}">
+                                            <Label Grid.Column="0" 
+                                                   Text="KABUL EDİLDİ" 
+                                                   TextColor="{StaticResource Primary}" 
+                                                   FontAttributes="Bold" 
+                                                   VerticalOptions="Center"/>
+                                            <Button Grid.Column="1" 
+                                                    Text="Teslimatı Yönet" 
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=ManageDeliveryCommand}" 
+                                                    CommandParameter="{Binding .}" />
+                                        </Grid>
 
-        <!-- Giden Teklifler (Outgoing Offers) -->
-        <CollectionView Grid.Row="1" 
-                       ItemsSource="{Binding OutgoingOffers}" 
-                       IsVisible="{Binding IsOutgoingSelected}">
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="models:Transaction">
-                    <Frame Margin="15,5" Padding="15" BorderColor="{StaticResource Gray300}">
-                        <VerticalStackLayout Spacing="8">
-                            <Label FontAttributes="Bold" Text="{Binding ProductTitle, StringFormat='İstenen Ürün: {0}'}"/>
-                            <Label Text="{Binding SellerName, StringFormat='Satıcı: {0}'}"/>
-                            <Label Text="{Binding OfferMessage, StringFormat='Mesajınız: {0}'}" 
-                                   IsVisible="{Binding OfferMessage, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
-                            <Label Text="{Binding OfferedProductTitle, StringFormat='Teklif Ettiğiniz Ürün: {0}'}" 
-                                   IsVisible="{Binding OfferedProductTitle, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
-                            <Label FontAttributes="Italic" Text="{Binding Status, StringFormat='Durum: {0}'}" />
+                                        <Label Text="TAMAMLANDI ✔️"
+                                               TextColor="Green"
+                                               FontAttributes="Bold"
+                                               IsVisible="{Binding IsDeliveryCompleted}"/>
 
-                            <Button Text="Teslimatı Yönet" 
-                                   IsVisible="{Binding Status, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static models:TransactionStatus.Accepted}}" 
-                                   Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=ManageDeliveryCommand}" 
-                                   CommandParameter="{Binding .}"/>
-                        </VerticalStackLayout>
-                    </Frame>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+                                        <Label Text="REDDEDİLDİ" 
+                                               TextColor="{StaticResource Danger}" 
+                                               FontAttributes="Bold" 
+                                               IsVisible="{Binding Status, Converter={StaticResource EqualityToBoolConverter}, ConverterParameter={x:Static models:TransactionStatus.Rejected}}"/>
+                                    </VerticalStackLayout>
+                                </Frame>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+
+                    <CollectionView ItemsSource="{Binding OutgoingOffers}" 
+                                    IsVisible="{Binding IsOutgoingSelected}">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Transaction">
+                                <Frame Margin="15,5" Padding="15" BorderColor="{StaticResource Gray300}">
+                                    <VerticalStackLayout Spacing="8">
+                                        <Label FontAttributes="Bold" Text="{Binding ProductTitle, StringFormat='İstenen Ürün: {0}'}"/>
+                                        <Label Text="{Binding SellerName, StringFormat='Satıcı: {0}'}"/>
+                                        <Label Text="{Binding OfferMessage, StringFormat='Mesajınız: {0}'}" 
+                                               IsVisible="{Binding OfferMessage, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
+                                        <Label Text="{Binding OfferedProductTitle, StringFormat='Teklif Ettiğiniz Ürün: {0}'}" 
+                                               IsVisible="{Binding OfferedProductTitle, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
+                                        <Label FontAttributes="Italic" Text="{Binding StatusText, StringFormat='Durum: {0}'}" />
+
+                                        <Button Text="Teslimatı Yönet" 
+                                                IsVisible="{Binding CanManageDelivery}" 
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=ManageDeliveryCommand}" 
+                                                CommandParameter="{Binding .}"/>
+                                    </VerticalStackLayout>
+                                </Frame>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </ScrollView>
+        </RefreshView>
     </Grid>
 </ContentPage>

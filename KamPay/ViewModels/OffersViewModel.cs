@@ -30,6 +30,9 @@ namespace KamPay.ViewModels
         private bool isLoading = true;
 
         [ObservableProperty]
+        private bool isRefreshing;
+
+        [ObservableProperty]
         private bool isIncomingSelected = true;
 
         [ObservableProperty]
@@ -62,7 +65,10 @@ namespace KamPay.ViewModels
                 .OrderBy("SellerId")
                 .EqualTo(currentUser.UserId)
                 .AsObservable<Transaction>()
-                .Subscribe(e => UpdateCollection(IncomingOffers, e));
+               .Subscribe(e => {
+                   UpdateCollection(IncomingOffers, e);
+                   IsLoading = false; // <-- İlk veri geldiğinde animasyonu gizle
+               });
 
             // 🔹 Giden teklifler
             _outgoingOffersSubscription = _firebaseClient
@@ -70,9 +76,11 @@ namespace KamPay.ViewModels
                 .OrderBy("BuyerId")
                 .EqualTo(currentUser.UserId)
                 .AsObservable<Transaction>()
-                .Subscribe(e => UpdateCollection(OutgoingOffers, e));
+.Subscribe(e => {
+    UpdateCollection(OutgoingOffers, e);
+    IsLoading = false; // <-- İlk veri geldiğinde animasyonu gizle
+});
 
-            IsLoading = false;
         }
 
         private void UpdateCollection(ObservableCollection<Transaction> collection, FirebaseEvent<Transaction> e)
@@ -106,6 +114,18 @@ namespace KamPay.ViewModels
                         break;
                 }
             });
+        }
+
+      
+        [RelayCommand]
+        private async Task RefreshOffersAsync()
+        {
+            IsRefreshing = true;
+            // Dinleyicileri durdurup yeniden başlatarak verileri tazeleyelim
+            Dispose();
+            StartListeningForOffers();
+            await Task.Delay(500); // UI'ın güncellenmesi için küçük bir gecikme
+            IsRefreshing = false;
         }
 
         [RelayCommand]

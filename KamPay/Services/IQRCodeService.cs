@@ -21,11 +21,9 @@ namespace KamPay.Services
     public class FirebaseQRCodeService : IQRCodeService
     {
         private readonly FirebaseClient _firebaseClient;
-        // Puan servisini kullanmak için bir alan (field) ekliyoruz.
         private readonly IUserProfileService _userProfileService;
         private const string QRCodesCollection = "delivery_qrcodes";
 
-        // HATA DÜZELTMESÝ: Constructor'ý güncelleyerek IUserProfileService'i parametre olarak alýyoruz.
         public FirebaseQRCodeService(IUserProfileService userProfileService)
         {
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
@@ -53,6 +51,8 @@ namespace KamPay.Services
                 if (transaction != null)
                 {
                     var allCodesResult = await GetQRCodesForTransactionAsync(transaction.TransactionId);
+
+                    // YENÝ: Ýþlemin tamamlanma kontrolü ve puan ekleme
                     if (allCodesResult.Success && allCodesResult.Data.All(c => c.IsUsed))
                     {
                         // TÜM TESLÝMATLAR BÝTTÝYSE:
@@ -68,9 +68,11 @@ namespace KamPay.Services
                         // PUANLARI EKLE
                         if (transaction.Type == ProductType.Bagis)
                         {
+                            // Baðýþý yapan kiþi (Seller) ve alan kiþi (Buyer) için puanlar
+                            await _userProfileService.AddPointsForAction(transaction.SellerId, UserAction.MakeDonation);
                             await _userProfileService.AddPointsForAction(transaction.BuyerId, UserAction.ReceiveDonation);
                         }
-                        else
+                        else // Satýþ veya Takas ise
                         {
                             await _userProfileService.AddPointsForAction(transaction.SellerId, UserAction.CompleteTransaction);
                             await _userProfileService.AddPointsForAction(transaction.BuyerId, UserAction.CompleteTransaction);
@@ -85,8 +87,8 @@ namespace KamPay.Services
                 return ServiceResult<bool>.FailureResult("Teslimat tamamlanamadý", ex.Message);
             }
         }
+       
 
-        // ... Diðer metotlarýnýzda deðiþiklik yok ...
         #region Diðer Metotlar
         private async Task MarkProductAsSold(string productId)
         {

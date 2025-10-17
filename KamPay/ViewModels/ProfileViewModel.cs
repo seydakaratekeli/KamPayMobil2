@@ -135,12 +135,12 @@ public partial class ProfileViewModel : ObservableObject
         {
             await Share.RequestAsync(new ShareTextRequest
             {
-                Title = "KamPay Profilim",
+                Title = "Profilimi Paylaş",
                 Text = $"{CurrentUser.FullName}\n" +
-                       $"🎯 {UserStats?.DonationPoints ?? 0} puan\n" +
-                       $"📦 {UserStats?.TotalProducts ?? 0} ürün\n" +
-                       $"🏆 {MyBadges.Count} rozet\n\n" +
-                       "KamPay ile paylaşıldı"
+               $"🎯 {UserStats?.Points ?? 0} puan\n" + // DÜZELTİLDİ
+               $"📦 {UserStats?.TotalProducts ?? 0} ürün\n" +
+               $"🏆 {MyBadges.Count} rozet\n\n" +
+               "KamPay ile paylaşıldı"
             });
         }
         catch (Exception ex)

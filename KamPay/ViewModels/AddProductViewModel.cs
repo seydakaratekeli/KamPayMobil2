@@ -10,6 +10,7 @@ namespace KamPay.ViewModels
     {
         private readonly IProductService _productService;
         private readonly IAuthenticationService _authService;
+        private readonly IUserProfileService _userProfileService;
 
         [ObservableProperty]
         private string title;
@@ -58,10 +59,11 @@ namespace KamPay.ViewModels
             .Cast<ProductType>()
             .ToList();
 
-        public AddProductViewModel(IProductService productService, IAuthenticationService authService)
+        public AddProductViewModel(IProductService productService, IAuthenticationService authService, IUserProfileService userProfileService)
         {
             _productService = productService;
             _authService = authService;
+            _userProfileService = userProfileService;
 
             // Varsayýlan deðerler
             SelectedCondition = ProductCondition.Iyi;
@@ -220,6 +222,8 @@ namespace KamPay.ViewModels
 
                 if (result.Success)
                 {
+                    await _userProfileService.AddPointsForAction(currentUser.UserId, UserAction.AddProduct);
+
                     await Application.Current.MainPage.DisplayAlert(
                         "Baþarýlý",
                         result.Message,

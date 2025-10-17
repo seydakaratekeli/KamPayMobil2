@@ -1,24 +1,38 @@
-namespace KamPay.Models;
-// Kullanýcý istatistikleri
-public class UserStats
-{
-    public string UserId { get; set; }
-    public int TotalProducts { get; set; }
-    public int ActiveProducts { get; set; }
-    public int SoldProducts { get; set; }
-    public int DonatedProducts { get; set; }
-    public int PurchasedProducts { get; set; }
-    public int TotalViews { get; set; }
-    public int TotalFavorites { get; set; }
-    public int DonationPoints { get; set; }
-    public int TrustScore { get; set; }
-    public DateTime MemberSince { get; set; }
-    public DateTime? LastActivityAt { get; set; }
+using System;
 
-    public UserStats()
+namespace KamPay.Models
+{
+    public class UserStats
     {
-        TrustScore = 100;
-        DonationPoints = 0;
-        MemberSince = DateTime.UtcNow;
+        public string UserId { get; set; }
+
+        /// <summary>
+        /// Kullanýcýnýn oyunlaþtýrma sistemiyle kazandýðý toplam puan.
+        /// </summary>
+        public int Points { get; set; }
+
+        /// <summary>
+        /// Baþarýyla tamamlanan takas veya satýþ sayýsý.
+        /// </summary>
+        public int CompletedTrades { get; set; }
+
+        /// <summary>
+        /// Kullanýcýnýn yaptýðý toplam baðýþ sayýsý. (Rozet için)
+        /// </summary>
+        public int DonatedProducts { get; set; }
+
+        /// <summary>
+        /// Kullanýcýnýn paylaþtýðý (ilan açtýðý) toplam ürün sayýsý. (Rozet için)
+        /// </summary>
+        public int TotalProducts { get; set; }
+
+        /// <summary>
+        /// Kullanýcýnýn satýn aldýðý veya takasla edindiði toplam ürün sayýsý. (Rozet için)
+        /// </summary>
+        public int PurchasedProducts { get; set; }
+
+        // Bu alanlarý eski kodunuzda gördüm, projenizin ihtiyacýna göre kalabilirler.
+        public int ItemsShared { get; set; }
+        public int DonationsMade { get; set; }
     }
 }
