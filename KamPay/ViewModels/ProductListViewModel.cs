@@ -4,15 +4,16 @@ using CommunityToolkit.Mvvm.Messaging;
 using KamPay.Models;
 using KamPay.Services;
 using KamPay.Views;
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics; // Hata ayýklama için eklendi
 using System.Linq;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
-using KamPay.Helpers;
 using Firebase.Database;
 using Firebase.Database.Query;
-using System.Reactive.Linq;
+using KamPay.Helpers;
 
 namespace KamPay.ViewModels
 {
@@ -104,12 +105,16 @@ namespace KamPay.ViewModels
         {
             IsLoading = true;
             _productSubscription?.Dispose();
+            _allProducts.Clear(); // Dinleyiciye baþlamadan önce ana listeyi temizle
 
             _productSubscription = _firebaseClient
                 .Child(Constants.ProductsCollection)
                 .AsObservable<Product>()
                 .Subscribe(e =>
                 {
+                    // Hata Ayýklama Mesajý
+                    Debug.WriteLine($"[DEBUG] Firebase Event: {e.EventType}, Key: {e.Key}");
+
                     MainThread.BeginInvokeOnMainThread(() =>
                     {
                         var product = e.Object;
@@ -118,8 +123,15 @@ namespace KamPay.ViewModels
 
                         if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
                         {
-                            if (existingProduct != null) _allProducts[_allProducts.IndexOf(existingProduct)] = product;
-                            else _allProducts.Insert(0, product);
+                            if (existingProduct != null)
+                            {
+                                var index = _allProducts.IndexOf(existingProduct);
+                                _allProducts[index] = product;
+                            }
+                            else
+                            {
+                                _allProducts.Insert(0, product);
+                            }
                         }
                         else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
                         {
@@ -129,6 +141,10 @@ namespace KamPay.ViewModels
                         ApplyFilters();
                         IsLoading = false;
                     });
+                }, ex => {
+                    // Hata durumunda loglama
+                    Debug.WriteLine($"[HATA] Firebase dinleyicisinde sorun: {ex.Message}");
+                    IsLoading = false;
                 });
         }
 
@@ -161,8 +177,10 @@ namespace KamPay.ViewModels
                 _ => filtered.OrderByDescending(p => p.CreatedAt),
             };
 
+            var filteredList = filtered.ToList();
+
             Products.Clear();
-            foreach (var product in filtered)
+            foreach (var product in filteredList)
             {
                 Products.Add(product);
             }
@@ -170,7 +188,6 @@ namespace KamPay.ViewModels
             EmptyMessage = Products.Any() ? string.Empty : "Arama kriterlerinize uygun ürün bulunamadý";
         }
 
-        // Bu metotlar sayesinde filtreler otomatik çalýþýr
         partial void OnSearchTextChanged(string value) => ApplyFilters();
         partial void OnSelectedCategoryChanged(Category value) => ApplyFilters();
         partial void OnSelectedSortOptionChanged(ProductSortOption value) => ApplyFilters();
@@ -178,7 +195,7 @@ namespace KamPay.ViewModels
 
         #endregion
 
-        #region Komutlar (Butonlar vb. için)
+        #region Komutlar
         [RelayCommand]
         private void ToggleFilterPanel() => ShowFilterPanel = !ShowFilterPanel;
 
