@@ -47,29 +47,38 @@ public partial class ProfileViewModel : ObservableObject
         {
             IsLoading = true;
 
-            // Kullanıcı bilgileri
             CurrentUser = await _authService.GetCurrentUserAsync();
             if (CurrentUser == null) return;
 
-            // İstatistikler
+            // İstatistikleri Yükle
             var statsResult = await _profileService.GetUserStatsAsync(CurrentUser.UserId);
             if (statsResult.Success)
             {
                 UserStats = statsResult.Data;
             }
+            else
+            {
+                // Eğer istatistik yüklenemezse, boş bir nesne oluşturarak null hatasını önle
+                UserStats = new UserStats();
+            }
 
-            // Ürünler
+            // Ürünleri Yükle
             var productsResult = await _productService.GetUserProductsAsync(CurrentUser.UserId);
             if (productsResult.Success && productsResult.Data != null)
             {
                 MyProducts.Clear();
-                foreach (var product in productsResult.Data.Take(10)) // İlk 10 ürün
+                foreach (var product in productsResult.Data.Take(10))
                 {
                     MyProducts.Add(product);
                 }
+                // ===== DÜZELTME 1: Ürün sayısını manuel olarak güncelle =====
+                if (UserStats != null)
+                {
+                    UserStats.TotalProducts = productsResult.Data.Count;
+                }
             }
 
-            // Rozetler
+            // Rozetleri Yükle
             var badgesResult = await _profileService.GetUserBadgesAsync(CurrentUser.UserId);
             if (badgesResult.Success && badgesResult.Data != null)
             {
@@ -78,6 +87,8 @@ public partial class ProfileViewModel : ObservableObject
                 {
                     MyBadges.Add(badge);
                 }
+                // Not: Rozet sayısı için ayrı bir alan UserStats'ta yok,
+                // doğrudan MyBadges.Count kullandığımız için burası doğru çalışıyor.
             }
         }
         catch (Exception ex)

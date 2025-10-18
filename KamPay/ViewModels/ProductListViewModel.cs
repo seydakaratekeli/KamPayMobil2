@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using KamPay.Models;
 using KamPay.Services;
 using KamPay.Views;
+using System.Collections.Generic;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -15,6 +16,7 @@ using System.Reactive.Linq;
 
 namespace KamPay.ViewModels
 {
+    [QueryProperty(nameof(UserId), "userId")]
     public partial class ProductListViewModel : ObservableObject, IDisposable
     {
         private readonly IProductService _productService;
@@ -23,41 +25,26 @@ namespace KamPay.ViewModels
         private IDisposable _productSubscription;
         private readonly FirebaseClient _firebaseClient = new(Constants.FirebaseRealtimeDbUrl);
 
-        [ObservableProperty]
-        private bool isLoading = true;
+        // Tüm ürünlerin tutulduðu ana liste (filtreleme için)
+        private List<Product> _allProducts = new();
 
-        [ObservableProperty]
-        private bool hasUnreadNotifications;
-
-        [ObservableProperty]
-        private string searchText;
-
-        [ObservableProperty]
-        private Category selectedCategory;
-
-        [ObservableProperty]
-        private ProductType? selectedType;
-
-        [ObservableProperty]
-        private ProductSortOption selectedSortOption;
-
-        [ObservableProperty]
-        private bool showFilterPanel;
-
-        [ObservableProperty]
-        private string emptyMessage = "Henüz ürün eklenmemiþ";
-
+        // Arayüze baðlanan ve sadece filtrelenmiþ ürünleri gösteren liste
         public ObservableCollection<Product> Products { get; } = new();
         public ObservableCollection<Category> Categories { get; } = new();
 
-        public List<ProductSortOption> SortOptions { get; } = new()
-        {
-            ProductSortOption.Newest,
-            ProductSortOption.Oldest,
-            ProductSortOption.PriceAsc,
-            ProductSortOption.PriceDesc,
-            ProductSortOption.MostViewed
-        };
+        #region Observable Properties (Arayüzle Ýletiþim Kuran Özellikler)
+        [ObservableProperty] private string userId;
+        [ObservableProperty] private bool isLoading = true;
+        [ObservableProperty] private bool hasUnreadNotifications;
+        [ObservableProperty] private string searchText;
+        [ObservableProperty] private Category selectedCategory;
+        [ObservableProperty] private ProductType? selectedType;
+        [ObservableProperty] private ProductSortOption selectedSortOption;
+        [ObservableProperty] private bool showFilterPanel;
+        [ObservableProperty] private string emptyMessage = "Henüz ürün eklenmemiþ";
+        #endregion
+
+        public List<ProductSortOption> SortOptions { get; } = Enum.GetValues(typeof(ProductSortOption)).Cast<ProductSortOption>().ToList();
 
         public ProductListViewModel(IProductService productService, IAuthenticationService authService)
         {
@@ -65,84 +52,58 @@ namespace KamPay.ViewModels
             _authService = authService;
             SelectedSortOption = ProductSortOption.Newest;
 
-            StartListeners();
-
             WeakReferenceMessenger.Default.Register<FavoriteCountChangedMessage>(this, (r, m) =>
             {
-                var productToUpdate = Products.FirstOrDefault(p => p.ProductId == m.Value.ProductId);
-                if (productToUpdate != null)
-                {
-                    productToUpdate.FavoriteCount = m.Value.FavoriteCount;
-                }
+                var productToUpdate = _allProducts.FirstOrDefault(p => p.ProductId == m.Value.ProductId);
+                if (productToUpdate != null) productToUpdate.FavoriteCount = m.Value.FavoriteCount;
             });
+            WeakReferenceMessenger.Default.Register<UnreadGeneralNotificationStatusMessage>(this, (r, m) => { HasUnreadNotifications = m.Value; });
 
-            WeakReferenceMessenger.Default.Register<UnreadGeneralNotificationStatusMessage>(this, (r, m) =>
-            {
-                HasUnreadNotifications = m.Value;
-            });
+            InitializeViewModel();
         }
 
-        private async void StartListeners()
+        private async void InitializeViewModel()
         {
             await LoadCategoriesAsync();
             StartListeningForNotifications();
-            StartListeningForProducts();
+
+            if (string.IsNullOrEmpty(UserId))
+            {
+                StartListeningForProducts();
+            }
         }
 
-        private async Task LoadCategoriesAsync()
+        #region Veri Yükleme ve Filtreleme Mantýðý
+
+        async partial void OnUserIdChanged(string value)
         {
-            var result = await _productService.GetCategoriesAsync();
-            if (result.Success && result.Data != null)
+            _productSubscription?.Dispose();
+            _allProducts.Clear();
+            Products.Clear();
+
+            if (!string.IsNullOrEmpty(value))
             {
-                Categories.Clear();
-                Categories.Add(new Category { CategoryId = null, Name = "Tümü", IconName = "apps.png" });
-                foreach (var category in result.Data)
+                IsLoading = true;
+                EmptyMessage = "Henüz ürün eklemediniz";
+                var result = await _productService.GetUserProductsAsync(value);
+                if (result.Success && result.Data != null)
                 {
-                    Categories.Add(category);
+                    _allProducts = result.Data;
+                    ApplyFilters();
                 }
+                IsLoading = false;
             }
-        }
-
-        private async void StartListeningForNotifications()
-        {
-            var currentUser = await _authService.GetCurrentUserAsync();
-            if (currentUser == null) return;
-
-            _notificationSubscription?.Dispose();
-
-            var initialCheck = await _firebaseClient
-                .Child(Constants.NotificationsCollection)
-                .OrderBy("UserId")
-                .EqualTo(currentUser.UserId)
-                .OnceAsync<Notification>();
-
-            if (initialCheck.Any(n => !n.Object.IsRead && n.Object.Type != NotificationType.NewMessage))
+            else
             {
-                HasUnreadNotifications = true;
+                EmptyMessage = "Arama kriterlerinize uygun ürün bulunamadý";
+                StartListeningForProducts();
             }
-
-            _notificationSubscription = _firebaseClient
-                .Child(Constants.NotificationsCollection)
-                .OrderBy("UserId")
-                .EqualTo(currentUser.UserId)
-                .AsObservable<Notification>()
-                .Where(e => e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
-                .Subscribe(entry =>
-                {
-                    if (entry.Object != null && !entry.Object.IsRead && entry.Object.Type != NotificationType.NewMessage)
-                    {
-                        MainThread.BeginInvokeOnMainThread(() =>
-                        {
-                            HasUnreadNotifications = true;
-                        });
-                    }
-                });
         }
 
         private void StartListeningForProducts()
         {
             IsLoading = true;
-            Products.Clear();
+            _productSubscription?.Dispose();
 
             _productSubscription = _firebaseClient
                 .Child(Constants.ProductsCollection)
@@ -153,71 +114,79 @@ namespace KamPay.ViewModels
                     {
                         var product = e.Object;
                         product.ProductId = e.Key;
-
-                        bool shouldBeInList = product.IsActive && !product.IsSold;
-                        var existingProduct = Products.FirstOrDefault(p => p.ProductId == product.ProductId);
+                        var existingProduct = _allProducts.FirstOrDefault(p => p.ProductId == product.ProductId);
 
                         if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
                         {
-                            if (shouldBeInList)
-                            {
-                                if (existingProduct != null)
-                                {
-                                    var index = Products.IndexOf(existingProduct);
-                                    Products[index] = product;
-                                }
-                                else
-                                {
-                                    Products.Insert(0, product);
-                                }
-                            }
-                            else if (existingProduct != null)
-                            {
-                                Products.Remove(existingProduct);
-                            }
+                            if (existingProduct != null) _allProducts[_allProducts.IndexOf(existingProduct)] = product;
+                            else _allProducts.Insert(0, product);
                         }
                         else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
                         {
-                            if (existingProduct != null)
-                            {
-                                Products.Remove(existingProduct);
-                            }
+                            if (existingProduct != null) _allProducts.Remove(existingProduct);
                         }
 
-                        EmptyMessage = Products.Any() ? string.Empty : "Arama kriterlerinize uygun ürün bulunamadý";
+                        ApplyFilters();
                         IsLoading = false;
                     });
                 });
         }
 
-        [RelayCommand]
-        private void SearchProducts()
-        {
-            // Real-time dinleyici aktif olduðu için, arama ve filtreleme lokalde yapýlabilir
-            // veya daha verimli bir yaklaþým olarak Firebase sorgusunu yeniden oluþturabiliriz.
-            // Þimdilik, dinleyiciyi yeniden baþlatarak basit bir çözüm uyguluyoruz.
-            _productSubscription?.Dispose();
-            StartListeningForProducts();
-        }
-
-        [RelayCommand]
-        private void ClearSearch()
-        {
-            SearchText = string.Empty;
-            SearchProducts();
-        }
-
-        [RelayCommand]
-        private void ToggleFilterPanel()
-        {
-            ShowFilterPanel = !ShowFilterPanel;
-        }
-
-        [RelayCommand]
         private void ApplyFilters()
         {
+            IEnumerable<Product> filtered = _allProducts.Where(p => p.IsActive && !p.IsSold);
+
+            if (SelectedCategory != null && !string.IsNullOrEmpty(SelectedCategory.CategoryId))
+            {
+                filtered = filtered.Where(p => p.CategoryId == SelectedCategory.CategoryId);
+            }
+
+            if (!string.IsNullOrEmpty(SearchText))
+            {
+                filtered = filtered.Where(p => p.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (SelectedType.HasValue)
+            {
+                filtered = filtered.Where(p => p.Type == SelectedType.Value);
+            }
+
+            filtered = SelectedSortOption switch
+            {
+                ProductSortOption.Oldest => filtered.OrderBy(p => p.CreatedAt),
+                ProductSortOption.PriceAsc => filtered.OrderBy(p => p.Price),
+                ProductSortOption.PriceDesc => filtered.OrderByDescending(p => p.Price),
+                ProductSortOption.MostViewed => filtered.OrderByDescending(p => p.ViewCount),
+                ProductSortOption.MostFavorited => filtered.OrderByDescending(p => p.FavoriteCount),
+                _ => filtered.OrderByDescending(p => p.CreatedAt),
+            };
+
+            Products.Clear();
+            foreach (var product in filtered)
+            {
+                Products.Add(product);
+            }
+
+            EmptyMessage = Products.Any() ? string.Empty : "Arama kriterlerinize uygun ürün bulunamadý";
+        }
+
+        // Bu metotlar sayesinde filtreler otomatik çalýþýr
+        partial void OnSearchTextChanged(string value) => ApplyFilters();
+        partial void OnSelectedCategoryChanged(Category value) => ApplyFilters();
+        partial void OnSelectedSortOptionChanged(ProductSortOption value) => ApplyFilters();
+        partial void OnSelectedTypeChanged(ProductType? value) => ApplyFilters();
+
+        #endregion
+
+        #region Komutlar (Butonlar vb. için)
+        [RelayCommand]
+        private void ToggleFilterPanel() => ShowFilterPanel = !ShowFilterPanel;
+
+        [RelayCommand]
+        private void ApplyFiltersCommand()
+        {
             ShowFilterPanel = false;
-            SearchProducts();
+            ApplyFilters();
         }
 
         [RelayCommand]
@@ -227,65 +196,12 @@ namespace KamPay.ViewModels
             SelectedType = null;
             SelectedSortOption = ProductSortOption.Newest;
             SearchText = string.Empty;
-            SearchProducts();
         }
 
         [RelayCommand]
         private void CategoryTapped(Category category)
         {
             SelectedCategory = category;
-            SearchProducts();
-        }
-
-        [RelayCommand]
-        private async Task ProductTappedAsync(Product product)
-        {
-            // Eðer ürün null ise veya ürün satýlmýþsa, hiçbir þey yapma ve metottan çýk.
-            if (product is null || product.IsSold)
-                return;
-
-            // Eðer ürün satýlmamýþsa, detay sayfasýna gitmeye devam et.
-            await Shell.Current.GoToAsync($"{nameof(ProductDetailPage)}?ProductId={product.ProductId}");
-        }
-
-        [RelayCommand]
-        private async Task GoToNotificationsAsync()
-        {
-            if (HasUnreadNotifications)
-            {
-                HasUnreadNotifications = false;
-            }
-            await Shell.Current.GoToAsync(nameof(NotificationsPage));
-        }
-
-        [RelayCommand]
-        private async Task GoToAddProductAsync()
-        {
-            await Shell.Current.GoToAsync(nameof(AddProductPage));
-        }
-
-        partial void OnSelectedSortOptionChanged(ProductSortOption value)
-        {
-            SearchProducts();
-        }
-
-        partial void OnSelectedTypeChanged(ProductType? value)
-        {
-            SearchProducts();
-        }
-
-        public string GetSortOptionText(ProductSortOption option)
-        {
-            return option switch
-            {
-                ProductSortOption.Newest => "En Yeni",
-                ProductSortOption.Oldest => "En Eski",
-                ProductSortOption.PriceAsc => "Fiyat (Düþükten Yükseðe)",
-                ProductSortOption.PriceDesc => "Fiyat (Yüksekten Düþüðe)",
-                ProductSortOption.MostViewed => "En Çok Görüntülenen",
-                ProductSortOption.MostFavorited => "En Çok Favorilenen",
-                _ => "Sýrala"
-            };
         }
 
         [RelayCommand]
@@ -294,12 +210,74 @@ namespace KamPay.ViewModels
             await Shell.Current.GoToAsync(nameof(SurpriseBoxPage));
         }
 
+        [RelayCommand]
+        private async Task ProductTappedAsync(Product product)
+        {
+            if (product is null || product.IsSold) return;
+            await Shell.Current.GoToAsync($"{nameof(ProductDetailPage)}?ProductId={product.ProductId}");
+        }
+
+        [RelayCommand]
+        private async Task GoToNotificationsAsync()
+        {
+            if (HasUnreadNotifications) HasUnreadNotifications = false;
+            await Shell.Current.GoToAsync(nameof(NotificationsPage));
+        }
+
+        [RelayCommand]
+        private async Task GoToAddProductAsync()
+        {
+            await Shell.Current.GoToAsync(nameof(AddProductPage));
+        }
+        #endregion
+
+        #region Yardýmcý Metotlar
+        private async Task LoadCategoriesAsync()
+        {
+            var result = await _productService.GetCategoriesAsync();
+            if (result.Success && result.Data != null)
+            {
+                if (!Categories.Any())
+                {
+                    Categories.Add(new Category { CategoryId = null, Name = "Tümü", IconName = "apps.png" });
+                }
+                foreach (var category in result.Data.Where(c => !Categories.Any(existing => existing.CategoryId == c.CategoryId)))
+                {
+                    Categories.Add(category);
+                }
+            }
+        }
+
+        private async void StartListeningForNotifications()
+        {
+            var currentUser = await _authService.GetCurrentUserAsync();
+            if (currentUser == null) return;
+            _notificationSubscription?.Dispose();
+            var initialCheck = await _firebaseClient.Child(Constants.NotificationsCollection).OrderBy("UserId").EqualTo(currentUser.UserId).OnceAsync<Notification>();
+            if (initialCheck.Any(n => !n.Object.IsRead && n.Object.Type != NotificationType.NewMessage))
+            {
+                HasUnreadNotifications = true;
+            }
+            _notificationSubscription = _firebaseClient.Child(Constants.NotificationsCollection).OrderBy("UserId").EqualTo(currentUser.UserId).AsObservable<Notification>().Where(e => e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate).Subscribe(entry =>
+            {
+                if (entry.Object != null && !entry.Object.IsRead && entry.Object.Type != NotificationType.NewMessage)
+                {
+                    MainThread.BeginInvokeOnMainThread(() => { HasUnreadNotifications = true; });
+                }
+            });
+        }
+
+        public string GetSortOptionText(ProductSortOption option)
+        {
+            return option switch { ProductSortOption.Newest => "En Yeni", ProductSortOption.Oldest => "En Eski", ProductSortOption.PriceAsc => "Fiyat (Artan)", ProductSortOption.PriceDesc => "Fiyat (Azalan)", ProductSortOption.MostViewed => "En Çok Görüntülenen", ProductSortOption.MostFavorited => "En Çok Favorilenen", _ => "Sýrala" };
+        }
+
         public void Dispose()
         {
             _notificationSubscription?.Dispose();
             _productSubscription?.Dispose();
-            WeakReferenceMessenger.Default.Unregister<FavoriteCountChangedMessage>(this);
-            WeakReferenceMessenger.Default.Unregister<UnreadGeneralNotificationStatusMessage>(this);
+            WeakReferenceMessenger.Default.UnregisterAll(this);
         }
+        #endregion
     }
 }
