@@ -139,13 +139,14 @@ namespace KamPay.Models
         public string Title { get; set; }
         public string Description { get; set; }
         public string CategoryId { get; set; }
+        public string CategoryName { get; set; } 
         public ProductCondition Condition { get; set; }
         public ProductType Type { get; set; }
         public decimal Price { get; set; }
         public string Location { get; set; }
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
-        public List<string> ImagePaths { get; set; } // Local paths
+        public List<string> ImagePaths { get; set; } 
         public string ExchangePreference { get; set; }
         public bool IsForSurpriseBox { get; set; }
 

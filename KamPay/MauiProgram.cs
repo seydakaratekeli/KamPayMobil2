@@ -129,7 +129,10 @@ namespace KamPay
             builder.Services.AddTransient<ServiceSharingPage>();
             builder.Services.AddTransient<QRCodeDisplayPage>();
             builder.Services.AddTransient<QRScannerPage>();
-            builder.Services.AddTransient<ServiceRequestsPage>(); // Bu satırı ekleyin
+            builder.Services.AddTransient<ServiceRequestsPage>(); 
+            builder.Services.AddSingleton<ICategoryService, FirebaseCategoryService>();
+
+
 #if DEBUG
             builder.Logging.AddDebug();
 #endif

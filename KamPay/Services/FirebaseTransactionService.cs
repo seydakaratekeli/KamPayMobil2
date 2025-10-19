@@ -204,8 +204,7 @@ namespace KamPay.Services
 
                     // 2. QR Kodlarý Oluþtur (DÜZELTÝLMÝÞ KISIM)
 
-                    // HATALI SATIRI SÝLÝYORUZ:
-                    // var qrCodeService = new FirebaseQRCodeService(); 
+                 
 
                     // YERÝNE DOÐRU OLANI, YANÝ ENJEKTE EDÝLENÝ KULLANIYORUZ:
                     await _qrCodeService.GenerateDeliveryQRCodeAsync(transaction.TransactionId, transaction.ProductId, transaction.ProductTitle, transaction.SellerId, transaction.BuyerId);

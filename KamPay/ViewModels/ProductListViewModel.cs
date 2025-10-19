@@ -22,9 +22,11 @@ namespace KamPay.ViewModels
     {
         private readonly IProductService _productService;
         private readonly IAuthenticationService _authService;
+        private readonly ICategoryService _categoryService; // DOÐRU SERVÝS EKLENDÝ
         private IDisposable _notificationSubscription;
         private IDisposable _productSubscription;
         private readonly FirebaseClient _firebaseClient = new(Constants.FirebaseRealtimeDbUrl);
+        private CancellationTokenSource _searchCancellationTokenSource; // YENÝ EKLENDÝ
 
         // Tüm ürünlerin tutulduðu ana liste (filtreleme için)
         private List<Product> _allProducts = new();
@@ -47,10 +49,11 @@ namespace KamPay.ViewModels
 
         public List<ProductSortOption> SortOptions { get; } = Enum.GetValues(typeof(ProductSortOption)).Cast<ProductSortOption>().ToList();
 
-        public ProductListViewModel(IProductService productService, IAuthenticationService authService)
+        public ProductListViewModel(IProductService productService, IAuthenticationService authService, ICategoryService categoryService) // ICategoryService'i buraya ekleyin)
         {
             _productService = productService;
             _authService = authService;
+            _categoryService = categoryService; // Gelen servisi atayýn
             SelectedSortOption = ProductSortOption.Newest;
 
             WeakReferenceMessenger.Default.Register<FavoriteCountChangedMessage>(this, (r, m) =>
@@ -63,7 +66,7 @@ namespace KamPay.ViewModels
             InitializeViewModel();
         }
 
-        private async void InitializeViewModel()
+        public async void InitializeViewModel()
         {
             await LoadCategoriesAsync();
             StartListeningForNotifications();
@@ -103,9 +106,17 @@ namespace KamPay.ViewModels
 
         private void StartListeningForProducts()
         {
-            IsLoading = true;
+            // ÇÖZÜM: Sadece ana ürün listesi boþsa yükleme animasyonunu göster.
+            // Bu, sadece ilk yüklemede veya filtre tamamen boþaldýðýnda çalýþýr.
+            if (!_allProducts.Any())
+            {
+                IsLoading = true;
+            }
+
             _productSubscription?.Dispose();
-            _allProducts.Clear(); // Dinleyiciye baþlamadan önce ana listeyi temizle
+            // NOT: _allProducts listesini burada temizlemiyoruz.
+            // Çünkü geri dönüldüðünde eski veriyi göstermek istiyoruz.
+            // Dinleyici yeni verileri getirdikçe liste güncellenecektir.
 
             _productSubscription = _firebaseClient
                 .Child(Constants.ProductsCollection)
@@ -142,9 +153,16 @@ namespace KamPay.ViewModels
                         IsLoading = false;
                     });
                 }, ex => {
-                    // Hata durumunda loglama
-                    Debug.WriteLine($"[HATA] Firebase dinleyicisinde sorun: {ex.Message}");
-                    IsLoading = false;
+                    if (ex is TimeoutException)
+                    {
+                        Debug.WriteLine("[DEBUG] Firebase dinleyicisi zaman aþýmýna uðradý.");
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"[HATA] Firebase dinleyicisinde sorun: {ex.Message}");
+                    }
+                    // Her durumda yükleme animasyonunu kapat
+                    MainThread.BeginInvokeOnMainThread(() => { IsLoading = false; });
                 });
         }
 
@@ -188,7 +206,27 @@ namespace KamPay.ViewModels
             EmptyMessage = Products.Any() ? string.Empty : "Arama kriterlerinize uygun ürün bulunamadý";
         }
 
-        partial void OnSearchTextChanged(string value) => ApplyFilters();
+        async partial void OnSearchTextChanged(string value)
+        {
+            // Önceki gecikme görevini iptal et (kullanýcý hala yazýyor)
+            _searchCancellationTokenSource?.Cancel();
+            _searchCancellationTokenSource = new CancellationTokenSource();
+
+            try
+            {
+                // Kullanýcýnýn yazmayý býrakmasý için 300 milisaniye bekle
+                await Task.Delay(300, _searchCancellationTokenSource.Token);
+
+                // Bekleme süresi dolduysa ve iptal edilmediyse, filtrelemeyi þimdi yap
+                ApplyFilters();
+            }
+            catch (TaskCanceledException)
+            {
+                // Bu hata, kullanýcý hýzlý yazdýðýnda beklenen bir durumdur.
+                // Görevin iptal edildiðini gösterir, görmezden gelebiliriz.
+                Debug.WriteLine("Arama ertelendi (debounced).");
+            }
+        }
         partial void OnSelectedCategoryChanged(Category value) => ApplyFilters();
         partial void OnSelectedSortOptionChanged(ProductSortOption value) => ApplyFilters();
         partial void OnSelectedTypeChanged(ProductType? value) => ApplyFilters();
@@ -251,14 +289,15 @@ namespace KamPay.ViewModels
         #region Yardýmcý Metotlar
         private async Task LoadCategoriesAsync()
         {
-            var result = await _productService.GetCategoriesAsync();
-            if (result.Success && result.Data != null)
+            // Yeni ve doðru servisi kullanýyoruz
+            var categoryList = await _categoryService.GetCategoriesAsync();
+
+            if (categoryList != null)
             {
-                if (!Categories.Any())
-                {
-                    Categories.Add(new Category { CategoryId = null, Name = "Tümü", IconName = "apps.png" });
-                }
-                foreach (var category in result.Data.Where(c => !Categories.Any(existing => existing.CategoryId == c.CategoryId)))
+                // Mevcut XAML tasarýmýnýz "Tümü" butonunu kendi içinde barýndýrdýðý için,
+                // ViewModel'de tekrar eklememize gerek yok. Listeyi temizleyip gelen verilerle doldurmak yeterli.
+                Categories.Clear();
+                foreach (var category in categoryList)
                 {
                     Categories.Add(category);
                 }

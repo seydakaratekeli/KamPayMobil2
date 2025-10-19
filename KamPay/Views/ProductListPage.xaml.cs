@@ -4,16 +4,30 @@ namespace KamPay.Views;
 
 public partial class ProductListPage : ContentPage
 {
+    private bool _isInitialized = false;
+
     public ProductListPage(ProductListViewModel vm)
     {
         InitializeComponent();
         BindingContext = vm;
     }
-    private async void OnBackClicked(object sender, EventArgs e)
+
+    protected override void OnAppearing()
     {
-        await Shell.Current.GoToAsync("..");
+        base.OnAppearing();
+        if (BindingContext is ProductListViewModel vm)
+        {
+            // Bu kontrol, sayfa ilk oluþturulduðunda metodun iki kez
+            // (hem constructor hem de OnAppearing tarafýndan) çaðrýlmasýný önler.
+            // Sayfaya geri dönüldüðünde ise dinleyiciyi yeniden baþlatýr.
+            if (_isInitialized)
+            {
+                vm.InitializeViewModel();
+            }
+            _isInitialized = true;
+        }
     }
-    // KamPay/Views/ProductListPage.xaml.cs
+
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
@@ -22,4 +36,10 @@ public partial class ProductListPage : ContentPage
             disposable.Dispose();
         }
     }
+
+    // Varsa bu metodu silebilir veya tutabilirsiniz, artýk gerekli deðil.
+    // private async void OnBackClicked(object sender, EventArgs e)
+    // {
+    //     await Shell.Current.GoToAsync("..");
+    // }
 }

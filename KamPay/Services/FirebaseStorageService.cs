@@ -42,23 +42,14 @@ public class FirebaseStorageService : IStorageService
             var fileName = $"{productId}_{imageIndex}_{Guid.NewGuid()}{extension}";
 
             // Firebase Storage'a yükle
-            var stream = File.OpenRead(localPath);
-            var task = _storage
-                .Child(Constants.ProductImagesFolder)
-                .Child(productId)
-                .Child(fileName)
-                .PutAsync(stream);
-      
-            // URL'i al
-            var downloadUrl = await task;
+            await using var stream = File.OpenRead(localPath);
+            var downloadUrl = await _storage
+            .Child(Constants.ProductImagesFolder)
+            .Child(productId)
+            .Child(fileName)
+            .PutAsync(stream);
 
-            stream.Close();
-            stream.Dispose();
-
-            return ServiceResult<string>.SuccessResult(
-                downloadUrl,
-                "Görsel başarıyla yüklendi"
-            );
+            return ServiceResult<string>.SuccessResult(downloadUrl, "Görsel başarıyla yüklendi");
         }
         catch (Exception ex)
         {
@@ -88,16 +79,14 @@ public class FirebaseStorageService : IStorageService
             }
 
             var extension = Path.GetExtension(localPath);
-            var fileName = $"{userId}_profile{extension}";
+            var fileName = $"{userId}_profile{Path.GetExtension(localPath)}";
 
-            var stream = File.OpenRead(localPath);
+            await using var stream = File.OpenRead(localPath);
+
             var downloadUrl = await _storage
                 .Child(Constants.ProfileImagesFolder)
                 .Child(fileName)
                 .PutAsync(stream);
-
-            stream.Close();
-            stream.Dispose();
 
             return ServiceResult<string>.SuccessResult(downloadUrl);
         }

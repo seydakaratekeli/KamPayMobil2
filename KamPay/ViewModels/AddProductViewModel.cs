@@ -3,6 +3,8 @@ using CommunityToolkit.Mvvm.Input;
 using KamPay.Models;
 using KamPay.Services;
 using System.Collections.ObjectModel;
+using System.Threading.Tasks;
+using System.IO; // Path.GetFileName için eklendi
 
 namespace KamPay.ViewModels
 {
@@ -11,6 +13,7 @@ namespace KamPay.ViewModels
         private readonly IProductService _productService;
         private readonly IAuthenticationService _authService;
         private readonly IUserProfileService _userProfileService;
+        private readonly ICategoryService _categoryService; // YENÝ: Kategoriler için
 
         [ObservableProperty]
         private string title;
@@ -65,11 +68,18 @@ namespace KamPay.ViewModels
             .Cast<ProductType>()
             .ToList();
 
-        public AddProductViewModel(IProductService productService, IAuthenticationService authService, IUserProfileService userProfileService)
+        // CONSTRUCTOR'I GÜNCELLEYELÝM
+        public AddProductViewModel(
+            IProductService productService,
+            IAuthenticationService authService,
+            IUserProfileService userProfileService, // HATA DÜZELTMESÝ: Geri eklendi
+            IStorageService storageService, // Eklendi
+            ICategoryService categoryService) // Eklendi (IUserProfileService yerine þimdilik bu daha kritik)
         {
             _productService = productService;
             _authService = authService;
-            _userProfileService = userProfileService;
+            _userProfileService = userProfileService; // HATA DÜZELTMESÝ: Atama yapýldý
+            _categoryService = categoryService;
 
             // Varsayýlan deðerler
             SelectedCondition = ProductCondition.Iyi;
@@ -77,7 +87,9 @@ namespace KamPay.ViewModels
             ShowPriceField = true;
             ShowExchangeField = false;
 
-            LoadCategoriesAsync();
+            // Constructor içinde async çaðýrmak yerine, komutu sayfa açýldýðýnda tetikleyeceðiz.
+            // VEYA komutu doðrudan burada çaðýrabiliriz:
+            // LoadCategoriesCommand.Execute(null); // Sayfa açýlmadan yüklemeye baþlar
         }
 
         partial void OnSelectedTypeChanged(ProductType value)
@@ -100,22 +112,37 @@ namespace KamPay.ViewModels
         }
 
 
-        private async void LoadCategoriesAsync()
+        [RelayCommand]
+        private async Task LoadCategoriesAsync()
         {
-            var result = await _productService.GetCategoriesAsync();
-            if (result.Success && result.Data != null)
+            if (IsLoading) return;
+            try
             {
-                Categories.Clear();
-                foreach (var category in result.Data)
-                {
-                    Categories.Add(category);
-                }
+                IsLoading = true;
+                var categoryList = await _categoryService.GetCategoriesAsync(); // Doðru servisten çaðýrýyoruz
 
-                // Ýlk kategoriyi seç
-                if (Categories.Any())
+                if (categoryList != null)
                 {
-                    SelectedCategory = Categories.First();
+                    Categories.Clear();
+                    foreach (var category in categoryList)
+                    {
+                        Categories.Add(category);
+                    }
+
+                    if (Categories.Any())
+                    {
+                        SelectedCategory = Categories.First();
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = $"Kategoriler yüklenemedi: {ex.Message}";
+                await Shell.Current.DisplayAlert("Hata", ErrorMessage, "Tamam");
+            }
+            finally
+            {
+                IsLoading = false;
             }
         }
 
@@ -194,76 +221,64 @@ namespace KamPay.ViewModels
         [RelayCommand]
         private async Task SaveProductAsync()
         {
+            if (IsLoading) return;
+
+            // Gerekli alanlarýn dolu olduðunu doðrulayýn
+            if (string.IsNullOrWhiteSpace(Title) || SelectedCategory == null || !ImagePaths.Any())
+            {
+                ErrorMessage = "Lütfen baþlýk, kategori ve en az bir resim eklediðinizden emin olun.";
+                await Shell.Current.DisplayAlert("Eksik Bilgi", ErrorMessage, "Tamam");
+                return;
+            }
+
             try
             {
                 IsLoading = true;
                 ErrorMessage = string.Empty;
 
-                // Kullanýcý kontrolü
                 var currentUser = await _authService.GetCurrentUserAsync();
                 if (currentUser == null)
                 {
-                    await Application.Current.MainPage.DisplayAlert(
-                        "Hata",
-                        "Oturum bulunamadý. Lütfen tekrar giriþ yapýn.",
-                        "Tamam"
-                    );
+                    await Shell.Current.DisplayAlert("Hata", "Oturum bulunamadý. Lütfen tekrar giriþ yapýn.", "Tamam");
                     return;
                 }
 
-                // Kategori kontrolü
-                if (SelectedCategory == null)
-                {
-                    ErrorMessage = "Lütfen bir kategori seçin";
-                    return;
-                }
-
-                // Request oluþtur
+                // Modelinize uygun 'ProductRequest' nesnesini oluþturuyoruz.
+                // Bu nesne, resimlerin sadece lokal yollarýný içerir.
                 var request = new ProductRequest
                 {
-                    Title = Title,
-                    Description = Description,
+                    Title = this.Title,
+                    Description = this.Description,
                     CategoryId = SelectedCategory.CategoryId,
-                    Condition = SelectedCondition,
-                    Type = SelectedType,
-                    Price = Price,
-                    Location = Location,
-                    ExchangePreference = ExchangePreference,
-                    ImagePaths = ImagePaths.ToList(),
+                    CategoryName = SelectedCategory.Name,
+                    Condition = this.SelectedCondition,
+                    Type = this.SelectedType,
+                    Price = this.Price,
+                    Location = this.Location,
+                    ExchangePreference = this.ExchangePreference,
+                    ImagePaths = this.ImagePaths.ToList(), // Lokal dosya yollarýný servise gönderiyoruz
                     IsForSurpriseBox = this.IsForSurpriseBox
                 };
 
-                // Ürünü ekle
+                // Servisi, beklediði doðru parametrelerle çaðýrýyoruz.
+                // Resim yükleme iþini bu metot kendi içinde halledecektir.
                 var result = await _productService.AddProductAsync(request, currentUser);
 
                 if (result.Success)
                 {
                     await _userProfileService.AddPointsForAction(currentUser.UserId, UserAction.AddProduct);
-
-                    await Application.Current.MainPage.DisplayAlert(
-                        "Baþarýlý",
-                        result.Message,
-                        "Tamam"
-                    );
-
-                    // Formu temizle
+                    await Shell.Current.DisplayAlert("Baþarýlý", "Ürününüz baþarýyla eklendi!", "Harika!");
                     ClearForm();
-
-                    // Ana sayfaya dön
                     await Shell.Current.GoToAsync("..");
                 }
                 else
                 {
                     ErrorMessage = result.Message;
-                    if (result.Errors != null && result.Errors.Any())
-                    {
-                        ErrorMessage += "\n" + string.Join("\n", result.Errors);
-                    }
                 }
             }
             catch (Exception ex)
             {
-                ErrorMessage = $"Ürün eklenirken hata oluþtu: {ex.Message}";
+                ErrorMessage = $"Ürün kaydedilirken beklenmedik bir hata oluþtu: {ex.Message}";
             }
             finally
             {

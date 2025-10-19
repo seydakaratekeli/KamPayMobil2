@@ -4,19 +4,15 @@ using System.Collections.Generic;
 
 namespace KamPay.Models
 {
-
-    // Kategori modeli
     public class Category
     {
         public string CategoryId { get; set; }
         public string Name { get; set; }
-        public string IconName { get; set; }
+        public string IconName { get; set; } // Sizin modelinizdeki ismi kullanıyoruz
         public string Description { get; set; }
 
-        public Category()
-        {
-            CategoryId = Guid.NewGuid().ToString();
-        }
+        // Constructor'ı boşaltın veya tamamen silin.
+        public Category() { }
 
         // Varsayılan kategoriler
         public static List<Category> GetDefaultCategories()

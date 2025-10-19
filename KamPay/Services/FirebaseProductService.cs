@@ -472,20 +472,30 @@ public class FirebaseProductService : IProductService
 
             if (firebaseCategories.Any())
             {
-                var categories = firebaseCategories.Select(c => c.Object).ToList();
+                // DÜZELTME: Firebase'den gelen 'Key'i, nesnenin 'CategoryId' özelliðine atýyoruz.
+                var categories = firebaseCategories.Select(c =>
+                {
+                    var category = c.Object;
+                    category.CategoryId = c.Key; // En önemli satýr!
+                    return category;
+                }).ToList();
+
                 return ServiceResult<List<Category>>.SuccessResult(categories);
             }
 
+            // --- Tohumlama (Seeding) Mantýðýný da Ýyileþtirelim ---
             var defaultCategories = Category.GetDefaultCategories();
             foreach (var category in defaultCategories)
             {
+                // PutAsync yerine PostAsync kullanarak Firebase'in benzersiz ID oluþturmasýný saðlayalým.
+                // Bu, yukarýdaki veri çekme mantýðýyla %100 uyumlu çalýþýr.
                 await _firebaseClient
                     .Child(Constants.CategoriesCollection)
-                    .Child(category.CategoryId)
-                    .PutAsync(category);
+                    .PostAsync(category);
             }
 
-            return ServiceResult<List<Category>>.SuccessResult(defaultCategories);
+            // Veritabaný boþsa ve yeni doldurulduysa, tekrar okuyarak doðru ID'lerle dönelim
+            return await GetCategoriesAsync();
         }
         catch (Exception ex)
         {
