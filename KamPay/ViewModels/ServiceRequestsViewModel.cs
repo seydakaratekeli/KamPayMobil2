@@ -25,6 +25,10 @@ namespace KamPay.ViewModels
             _authService = authService;
         }
 
+        // KamPay/ViewModels/ServiceRequestsViewModel.cs
+
+        // KamPay/ViewModels/ServiceRequestsViewModel.cs
+
         [RelayCommand]
         private async Task LoadRequestsAsync()
         {
@@ -35,18 +39,31 @@ namespace KamPay.ViewModels
                 var currentUser = await _authService.GetCurrentUserAsync();
                 if (currentUser == null) return;
 
+                // Servisten artýk iki liste içeren bir Tuple geliyor
                 var result = await _serviceService.GetMyServiceRequestsAsync(currentUser.UserId);
 
-                if (result.Success && result.Data != null)
+                // HATA DÜZELTMESÝ: result.Success ile kontrol ediyoruz
+                if (result.Success)
                 {
+                    // Gelen Talepler listesini temizle ve doldur
                     IncomingRequests.Clear();
-                    OutgoingRequests.Clear();
-                    var allRequests = result.Data.OrderByDescending(r => r.RequestedAt);
-                    foreach (var request in allRequests)
+                    // HATA DÜZELTMESÝ: Tuple içindeki 'Incoming' listesine eriþiyoruz
+                    foreach (var request in result.Data.Incoming)
                     {
-                        if (request.ProviderId == currentUser.UserId) IncomingRequests.Add(request);
-                        else if (request.RequesterId == currentUser.UserId) OutgoingRequests.Add(request);
+                        IncomingRequests.Add(request);
                     }
+
+                    // Giden Talepler listesini temizle ve doldur
+                    OutgoingRequests.Clear();
+                    // HATA DÜZELTMESÝ: Tuple içindeki 'Outgoing' listesine eriþiyoruz
+                    foreach (var request in result.Data.Outgoing)
+                    {
+                        OutgoingRequests.Add(request);
+                    }
+                }
+                else
+                {
+                    await Shell.Current.DisplayAlert("Hata", result.Message, "Tamam");
                 }
             }
             finally
@@ -54,9 +71,6 @@ namespace KamPay.ViewModels
                 IsLoading = false;
             }
         }
-
-        // --- DÜZELTME BAÞLANGICI ---
-
         // Kabul Etmek için yeni komut
         [RelayCommand]
         private async Task AcceptRequestAsync(ServiceRequest request)

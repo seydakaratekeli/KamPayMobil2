@@ -68,8 +68,16 @@ namespace KamPay.Services
         // Not: UpdateUserStatsAsync metodu, puan/rozet ekleme iþlemleri tarafýndan dolaylý olarak
         // kullanýldýðý için genellikle doðrudan çaðrýlmaz. Ýhtiyaç halinde kullanýlabilir.
         Task<ServiceResult<bool>> UpdateUserStatsAsync(UserStats stats);
-    
-    
-    
+        /// <summary>
+        /// Kullanýcýnýn profil bilgilerini (isim, kullanýcý adý, profil resmi) günceller.
+        /// </summary>
+        Task<ServiceResult<bool>> UpdateUserProfileAsync(
+            string userId,
+            string firstName = null,
+            string lastName = null,
+            string username = null,
+            string profileImageUrl = null);
+
+
     }
 }

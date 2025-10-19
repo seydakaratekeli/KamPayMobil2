@@ -110,40 +110,47 @@ public class FirebaseGoodDeedService : IGoodDeedService
     {
         try
         {
-            // Yorumu, ilgili ilanýn altýndaki "Comments" koleksiyonuna ekle
-            await _firebaseClient
-                .Child(GoodDeedPostsCollection)
-                .Child(postId)
-                .Child("Comments") // Yorumlarý tutan alt koleksiyon
-                .Child(comment.CommentId)
-                .PutAsync(comment);
+            // 1. Ýlgili ilaný veritabanýndan çek
+            var postNode = _firebaseClient.Child(GoodDeedPostsCollection).Child(postId);
+            var post = await postNode.OnceSingleAsync<GoodDeedPost>();
 
-            // Ýlanýn yorum sayacýný güncelle (transaction kullanmak daha güvenli olurdu ama bu da iþ görür)
-            var postRef = _firebaseClient.Child(GoodDeedPostsCollection).Child(postId);
-            var post = await postRef.OnceSingleAsync<GoodDeedPost>();
-            post.CommentCount++;
-            await postRef.PutAsync(post);
+            if (post == null)
+            {
+                return ServiceResult<Comment>.FailureResult("Yorum yapýlmak istenen ilan bulunamadý.");
+            }
+
+            // 2. Yorumlar sözlüðü (Dictionary) boþsa oluþtur, deðilse yeni yorumu ekle
+            if (post.Comments == null)
+            {
+                post.Comments = new Dictionary<string, Comment>();
+            }
+            post.Comments[comment.CommentId] = comment;
+
+            // 3. Ýlanýn yorum sayacýný sözlükteki eleman sayýsýna göre güncelle
+            post.CommentCount = post.Comments.Count;
+
+            // 4. Ýlanýn tamamýný, güncellenmiþ yorum listesiyle birlikte tek bir iþlemde veritabanýna geri yaz
+            await postNode.PutAsync(post);
+
+            // TODO: Ýlan sahibine yeni bir yorum yapýldýðýna dair bildirim gönderilebilir.
 
             return ServiceResult<Comment>.SuccessResult(comment, "Yorum eklendi.");
         }
         catch (Exception ex)
         {
-            return ServiceResult<Comment>.FailureResult("Hata", ex.Message);
+            return ServiceResult<Comment>.FailureResult("Yorum eklenirken bir hata oluþtu.", ex.Message);
         }
     }
-
     public async Task<ServiceResult<List<Comment>>> GetCommentsAsync(string postId)
     {
         try
         {
-            var commentsDict = await _firebaseClient
+            var post = await _firebaseClient
                 .Child(GoodDeedPostsCollection)
                 .Child(postId)
-                .Child("Comments")
-                .OnceAsync<Comment>();
+                .OnceSingleAsync<GoodDeedPost>();
 
-            var comments = commentsDict?
-                .Select(c => c.Object)
+            var comments = post?.Comments?.Values
                 .OrderBy(c => c.CreatedAt)
                 .ToList() ?? new List<Comment>();
 
@@ -151,9 +158,7 @@ public class FirebaseGoodDeedService : IGoodDeedService
         }
         catch (Exception ex)
         {
-            return ServiceResult<List<Comment>>.FailureResult("Hata", ex.Message);
+            return ServiceResult<List<Comment>>.FailureResult("Yorumlar alýnamadý.", ex.Message);
         }
     }
-
-
 }

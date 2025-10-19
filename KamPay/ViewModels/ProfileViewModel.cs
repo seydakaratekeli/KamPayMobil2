@@ -1,13 +1,10 @@
-﻿
-using System;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KamPay.Models;
 using KamPay.Services;
 using KamPay.Views;
+
 namespace KamPay.ViewModels;
 
 public partial class ProfileViewModel : ObservableObject
@@ -15,6 +12,7 @@ public partial class ProfileViewModel : ObservableObject
     private readonly IAuthenticationService _authService;
     private readonly IProductService _productService;
     private readonly IUserProfileService _profileService;
+    private readonly IStorageService _storageService;
 
     [ObservableProperty]
     private User currentUser;
@@ -31,11 +29,15 @@ public partial class ProfileViewModel : ObservableObject
     public ObservableCollection<Product> MyProducts { get; } = new();
     public ObservableCollection<UserBadge> MyBadges { get; } = new();
 
-    public ProfileViewModel(IAuthenticationService authService, IProductService productService, IUserProfileService profileService)
+    public ProfileViewModel(IAuthenticationService authService, 
+        IProductService productService, 
+        IUserProfileService profileService,
+        IStorageService storageService)
     {
         _authService = authService;
         _productService = productService;
         _profileService = profileService;
+        _storageService = storageService;
 
         LoadProfileAsync();
     }
@@ -112,11 +114,104 @@ public partial class ProfileViewModel : ObservableObject
     [RelayCommand]
     private async Task EditProfileAsync()
     {
-        await Application.Current.MainPage.DisplayAlert(
-            "Bilgi",
-            "Profil düzenleme özelliği yakında eklenecek",
-            "Tamam"
-        );
+        if (CurrentUser == null)
+        {
+            await Application.Current.MainPage.DisplayAlert("Hata", "Kullanıcı bilgisi bulunamadı.", "Tamam");
+            return;
+        }
+
+        // 🧩 1. Kullanıcıdan yeni isim bilgilerini alalım
+        string newFirstName = await Application.Current.MainPage.DisplayPromptAsync(
+            "Profil Güncelle",
+            "Yeni adınızı girin:",
+            initialValue: CurrentUser.FirstName);
+
+        if (string.IsNullOrWhiteSpace(newFirstName))
+            return;
+
+        string newLastName = await Application.Current.MainPage.DisplayPromptAsync(
+            "Profil Güncelle",
+            "Yeni soyadınızı girin:",
+            initialValue: CurrentUser.LastName);
+
+        if (string.IsNullOrWhiteSpace(newLastName))
+            return;
+
+        // 🧩 2. Kullanıcıdan yeni kullanıcı adını al
+        string newUsername = await Application.Current.MainPage.DisplayPromptAsync(
+            "Profil Güncelle",
+            "Yeni kullanıcı adınızı girin:",
+            initialValue: CurrentUser.FirstName + CurrentUser.LastName);
+
+        // 🧩 3. İsteğe bağlı: Yeni profil fotoğrafı seçimi
+        string uploadedImageUrl = null;
+        bool changePhoto = await Application.Current.MainPage.DisplayAlert(
+            "Profil Fotoğrafı",
+            "Profil fotoğrafını değiştirmek ister misin?",
+            "Evet",
+            "Hayır");
+
+        if (changePhoto)
+        {
+            try
+            {
+                var file = await MediaPicker.PickPhotoAsync(new MediaPickerOptions
+                {
+                    Title = "Yeni profil fotoğrafı seç"
+                });
+
+                if (file != null)
+                {
+                    // 🔹 Firebase Storage’a yükle
+                    var uploadResult = await _storageService.UploadProfileImageAsync(file.FullPath, CurrentUser.UserId);
+                    if (uploadResult.Success)
+                    {
+                        uploadedImageUrl = uploadResult.Data;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                await Application.Current.MainPage.DisplayAlert("Hata", "Fotoğraf yüklenemedi: " + ex.Message, "Tamam");
+            }
+        }
+
+        IsLoading = true;
+
+        try
+        {
+            // 🧩 4. Firebase üzerinde kullanıcıyı güncelle
+            var result = await _profileService.UpdateUserProfileAsync(
+                CurrentUser.UserId,
+                firstName: newFirstName,
+                lastName: newLastName,
+                username: newUsername,
+                profileImageUrl: uploadedImageUrl // 📸 foto seçildiyse ekle
+            );
+
+            if (result.Success)
+            {
+                // 🧩 5. Yerel model güncelle
+                CurrentUser.FirstName = newFirstName;
+                CurrentUser.LastName = newLastName;
+                if (!string.IsNullOrWhiteSpace(uploadedImageUrl))
+                    CurrentUser.ProfileImageUrl = uploadedImageUrl;
+
+                await Application.Current.MainPage.DisplayAlert("Başarılı", "Profil güncellendi!", "Tamam");
+            }
+            else
+            {
+                await Application.Current.MainPage.DisplayAlert("Hata", result.Message, "Tamam");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     [RelayCommand]

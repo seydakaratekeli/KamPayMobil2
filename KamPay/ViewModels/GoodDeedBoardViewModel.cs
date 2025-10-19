@@ -7,6 +7,7 @@ using KamPay.Services;
 using System.Collections.ObjectModel;
 using System.Linq; // FirstOrDefault için
 using System.Reactive.Linq; // AsObservable için
+using System.Diagnostics; 
 
 namespace KamPay.ViewModels
 {
@@ -15,6 +16,7 @@ namespace KamPay.ViewModels
         private readonly IGoodDeedService _goodDeedService;
         private readonly IAuthenticationService _authService;
         private readonly IUserProfileService _userProfileService; // Profil bilgisi için ekledik
+        private readonly FirebaseClient _firebaseClient;
         private IDisposable _postsSubscription; // Gerçek zamanlý dinleyici
 
         [ObservableProperty]
@@ -41,68 +43,19 @@ namespace KamPay.ViewModels
             _goodDeedService = goodDeedService;
             _authService = authService;
             _userProfileService = userProfileService; // Servisi ata
-
+            _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
             // Gerçek zamanlý dinleyiciyi baþlat
             // Not: Bu metot artýk `async void` DEÐÝL.
             // Sayfa açýldýðýnda OnAppearing ile tetiklenmesi daha doðru olur,
             // ama þimdilik bu þekilde býrakabiliriz. 
             // Daha önceki desenimize uymak için bunu da komut yapabiliriz.
-            StartListeningForPosts();
-        }
-        // Adým 1: async void'den kurtul. Bu metot artýk senkron.
-        private void StartListeningForPosts()
-        {
-            IsLoading = true;
-            var firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
-
-            _postsSubscription = firebaseClient
-                .Child("good_deed_posts")
-                .AsObservable<GoodDeedPost>()
-                .Subscribe(async e =>
-                {
-                    var currentUser = await _authService.GetCurrentUserAsync(); // Her olayda kullanýcýyý kontrol et
-
-                    await MainThread.InvokeOnMainThreadAsync(() =>
-                    {
-                        var post = e.Object;
-                        post.PostId = e.Key;
-                        if (currentUser != null)
-                        {
-                            post.IsOwner = post.UserId == currentUser.UserId;
-                        }
-
-                        var existingPost = Posts.FirstOrDefault(p => p.PostId == post.PostId);
-
-                        if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
-                        {
-                            if (existingPost != null)
-                            {
-                                var index = Posts.IndexOf(existingPost);
-                                Posts[index] = post;
-                            }
-                            else
-                            {
-                                // Yeni eklenenleri tarihe göre sýralý eklemek daha iyi bir UX saðlar
-                                var sortedPosts = Posts.Append(post).OrderByDescending(p => p.CreatedAt).ToList();
-                                Posts.Clear();
-                                foreach (var sortedPost in sortedPosts)
-                                {
-                                    Posts.Add(sortedPost);
-                                }
-                            }
-                        }
-                        else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
-                        {
-                            if (existingPost != null)
-                            {
-                                Posts.Remove(existingPost);
-                            }
-                        }
-                    });
-                });
-            IsLoading = false;
+            // StartListeningForPosts();
         }
 
+
+
+
+       
         [RelayCommand]
         private async Task CreatePostAsync()
         {
@@ -187,6 +140,75 @@ namespace KamPay.ViewModels
                 await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
             }
         }
+
+        public void StartListeningForPosts()
+        {
+            if (_postsSubscription != null) return;
+
+            IsLoading = !Posts.Any();
+
+            _postsSubscription = _firebaseClient
+                .Child("good_deed_posts")
+                .AsObservable<GoodDeedPost>()
+                .Subscribe(async e =>
+                {
+                    var currentUser = await _authService.GetCurrentUserAsync();
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        var post = e.Object;
+                        post.PostId = e.Key;
+                        if (currentUser != null)
+                        {
+                            post.IsOwner = post.UserId == currentUser.UserId;
+                        }
+
+                        var existingPost = Posts.FirstOrDefault(p => p.PostId == post.PostId);
+
+                        if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
+                        {
+                            if (existingPost != null)
+                            {
+                                var index = Posts.IndexOf(existingPost);
+                                // --- DÜZELTME BAÞLANGICI ---
+                                // Arayüzün güncellemeyi fark etmesi için eski ilaný kaldýrýp
+                                // güncel halini ayný pozisyona ekliyoruz.
+                                Posts.RemoveAt(index);
+                                Posts.Insert(index, post);
+                            }
+                            else
+                            {
+                                Posts.Insert(0, post); // Yeni ilaný baþa ekle
+                            }
+                        }
+                        else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
+                        {
+                            if (existingPost != null) Posts.Remove(existingPost);
+                        }
+
+                        // Sýralama her ihtimale karþý korunabilir
+                        var sortedPosts = Posts.OrderByDescending(p => p.CreatedAt).ToList();
+                        Posts.Clear();
+                        foreach (var p in sortedPosts) Posts.Add(p);
+
+                        IsLoading = false;
+                    });
+                }, ex =>
+                {
+                    Debug.WriteLine($"[HATA] Ýyilik Panosu dinlenirken sorun oluþtu: {ex.Message}");
+                    MainThread.InvokeOnMainThreadAsync(() => IsLoading = false);
+                });
+        }
+
+        public void StopListening()
+        {
+            _postsSubscription?.Dispose();
+            _postsSubscription = null;
+        }
+
+        public void Dispose()
+        {
+            StopListening();
+        }
         [RelayCommand]
         private async Task AddCommentAsync(GoodDeedPost post)
         {
@@ -218,11 +240,7 @@ namespace KamPay.ViewModels
             }
         }
 
-        // IDisposable implementasyonu
-        public void Dispose()
-        {
-            _postsSubscription?.Dispose();
-            _postsSubscription = null;
-        }
+      
+      
     }
 }

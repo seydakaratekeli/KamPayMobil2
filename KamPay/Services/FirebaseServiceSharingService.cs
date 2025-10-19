@@ -2,10 +2,10 @@ using Firebase.Database;
 using Firebase.Database.Query;
 using KamPay.Models;
 using KamPay.Helpers;
-using System; // Bu satýrý ekleyin
-using System.Collections.Generic; // Bu satýrý ekleyin
-using System.Linq; // Bu satýrý ekleyin
-using System.Threading.Tasks; // Bu satýrý ekleyin
+using System; 
+using System.Collections.Generic; 
+using System.Linq; 
+using System.Threading.Tasks; 
 
 namespace KamPay.Services
 {
@@ -151,57 +151,52 @@ namespace KamPay.Services
                 return ServiceResult<bool>.FailureResult("Ýþlem sýrasýnda hata oluþtu.", ex.Message);
             }
         }
-        // Bu metot þu an kullanýlmýyor ama ileride "Taleplerim" sayfasý için gerekecek.
-        public async Task<ServiceResult<List<ServiceRequest>>> GetMyServiceRequestsAsync(string userId)
+
+        // KamPay/Services/FirebaseServiceSharingService.cs
+
+        public async Task<ServiceResult<(List<ServiceRequest> Incoming, List<ServiceRequest> Outgoing)>> GetMyServiceRequestsAsync(string userId)
         {
             try
             {
-                // 1. Bana gelen talepleri çek (Benim Provider olduðum talepler)
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return ServiceResult<(List<ServiceRequest>, List<ServiceRequest>)>.FailureResult("Kullanýcý ID'si bulunamadý.");
+                }
+
                 var incomingRequestsTask = _firebaseClient
                     .Child(Constants.ServiceRequestsCollection)
                     .OrderBy("ProviderId")
                     .EqualTo(userId)
                     .OnceAsync<ServiceRequest>();
 
-                // 2. Benim gönderdiðim talepleri çek (Benim Requester olduðum talepler)
                 var outgoingRequestsTask = _firebaseClient
                     .Child(Constants.ServiceRequestsCollection)
                     .OrderBy("RequesterId")
                     .EqualTo(userId)
                     .OnceAsync<ServiceRequest>();
 
-                // Ýki sorguyu ayný anda çalýþtýrarak zaman kazan
                 await Task.WhenAll(incomingRequestsTask, outgoingRequestsTask);
 
-                var incomingRequests = incomingRequestsTask.Result;
-                var outgoingRequests = outgoingRequestsTask.Result;
-
-                // Ýki listeyi birleþtir
-                var allRequests = new List<ServiceRequest>();
-
-                if (incomingRequests != null)
-                {
-                    allRequests.AddRange(incomingRequests.Select(r => r.Object));
-                }
-                if (outgoingRequests != null)
-                {
-                    allRequests.AddRange(outgoingRequests.Select(r => r.Object));
-                }
-
-                // Yinelenen talepleri (eðer varsa) kaldýr ve tarihe göre sýrala
-                var distinctRequests = allRequests
-                    .GroupBy(r => r.RequestId)
-                    .Select(g => g.First())
+                // HATA 2 ve 3 DÜZELTMESÝ: 'CreatedAt' yerine 'RequestedAt' kullanýlýyor.
+                var incoming = incomingRequestsTask.Result
+                    .Select(item => { item.Object.RequestId = item.Key; return item.Object; })
                     .OrderByDescending(r => r.RequestedAt)
                     .ToList();
 
-                return ServiceResult<List<ServiceRequest>>.SuccessResult(distinctRequests);
+                var outgoing = outgoingRequestsTask.Result
+                    .Select(item => { item.Object.RequestId = item.Key; return item.Object; })
+                    .OrderByDescending(r => r.RequestedAt)
+                    .ToList();
+
+                // HATA 1 DÜZELTMESÝ: Geri döndürülen Tuple'a doðru isimler veriliyor.
+                return ServiceResult<(List<ServiceRequest>, List<ServiceRequest>)>.SuccessResult((Incoming: incoming, Outgoing: outgoing));
             }
             catch (Exception ex)
             {
-                return ServiceResult<List<ServiceRequest>>.FailureResult("Talepler alýnamadý.", ex.Message);
+                return ServiceResult<(List<ServiceRequest>, List<ServiceRequest>)>.FailureResult("Talepler getirilirken bir hata oluþtu.", ex.Message);
             }
         }
+
         // Bu metot þu an kullanýlmýyor ama ileride talepleri yanýtlarken gerekecek.
         public async Task<ServiceResult<bool>> RespondToRequestAsync(string requestId, bool accept)
         {

@@ -59,6 +59,10 @@ namespace KamPay.Services
             }
         }
 
+        
+
+
+
         /// <summary>
         /// Belirtilen kullanıcının genel profil bilgilerini getirir.
         /// </summary>
@@ -83,6 +87,49 @@ namespace KamPay.Services
             }
         }
 
+        public async Task<ServiceResult<bool>> UpdateUserProfileAsync(
+    string userId,
+    string firstName = null,
+    string lastName = null,
+    string username = null,
+    string profileImageUrl = null)
+        {
+            try
+            {
+                var profile = await _firebaseClient
+                    .Child("user_profiles")
+                    .Child(userId)
+                    .OnceSingleAsync<UserProfile>();
+
+                if (profile == null)
+                {
+                    return ServiceResult<bool>.FailureResult("Kullanıcı profili bulunamadı.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(firstName))
+                    profile.FirstName = firstName;
+
+                if (!string.IsNullOrWhiteSpace(lastName))
+                    profile.LastName = lastName;
+
+                if (!string.IsNullOrWhiteSpace(username))
+                    profile.Username = username;
+
+                if (!string.IsNullOrWhiteSpace(profileImageUrl))
+                    profile.ProfileImageUrl = profileImageUrl;
+
+                await _firebaseClient
+                    .Child("user_profiles")
+                    .Child(userId)
+                    .PutAsync(profile);
+
+                return ServiceResult<bool>.SuccessResult(true, "Profil başarıyla güncellendi.");
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<bool>.FailureResult("Profil güncellenemedi", ex.Message);
+            }
+        }
 
         // --- MEVCUT OYUNLAŞTIRMA METOTLARINIZ (GÜNCELLENMİŞ HALİYLE) ---
 
