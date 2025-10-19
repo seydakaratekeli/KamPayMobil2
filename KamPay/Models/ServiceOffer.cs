@@ -45,9 +45,14 @@ public class ServiceRequest
     public string ProviderId { get; set; }   // Hizmeti sunan kiþi
     public string RequesterId { get; set; }  // Hizmeti talep eden kiþi
     public string RequesterName { get; set; }
+
+    // --- YENÝ EKLENECEK PROPERTY ---
+    public int TimeCreditValue { get; set; } // Ýþlemin yapýldýðý andaki kredi deðeri
+
     public string Message { get; set; }
     public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
     public ServiceRequestStatus Status { get; set; } = ServiceRequestStatus.Pending;
+    public DateTime? CompletedAt { get; set; } // Hizmetin tamamlandýðý zamaný tutmak için
 }
 
 public enum ServiceRequestStatus

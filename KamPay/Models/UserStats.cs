@@ -34,5 +34,8 @@ namespace KamPay.Models
         // Bu alanlarý eski kodunuzda gördüm, projenizin ihtiyacýna göre kalabilirler.
         public int ItemsShared { get; set; }
         public int DonationsMade { get; set; }
+
+        public int TimeCredits { get; set; } = 0; // Baþlangýç deðeri 0
+
     }
 }

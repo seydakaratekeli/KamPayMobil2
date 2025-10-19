@@ -1,3 +1,5 @@
+// KamPay/ViewModels/FavoritesViewModel.cs
+
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -6,11 +8,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KamPay.Models;
 using KamPay.Services;
-using KamPay.Views;
 using Firebase.Database;
 using Firebase.Database.Query;
 using KamPay.Helpers;
 using System.Reactive.Linq;
+using KamPay.Views;
 
 namespace KamPay.ViewModels
 {
@@ -20,6 +22,7 @@ namespace KamPay.ViewModels
         private readonly IAuthenticationService _authService;
         private IDisposable _favoritesSubscription;
         private readonly FirebaseClient _firebaseClient = new(Constants.FirebaseRealtimeDbUrl);
+        private bool _isInitialized = false; // Verinin tekrar tekrar yüklenmesini engellemek için
 
         [ObservableProperty]
         private bool isLoading = true;
@@ -33,16 +36,39 @@ namespace KamPay.ViewModels
         {
             _favoriteService = favoriteService;
             _authService = authService;
-            StartListeningForFavorites();
+            // Constructor'daki bu çaðrýyý SÝLÝYORUZ:
+            // StartListeningForFavorites();
         }
 
-        private async void StartListeningForFavorites()
+        // YENÝ: Baþlatma komutu
+        [RelayCommand]
+        private async Task InitializeAsync()
         {
+            if (_isInitialized) return; // Zaten baþlatýldýysa tekrar çalýþtýrma
+
             IsLoading = true;
+            try
+            {
+                await StartListeningForFavoritesAsync();
+                _isInitialized = true;
+            }
+            catch (Exception ex)
+            {
+                // Hata durumunu kullanýcýya bildirmek için ideal bir yer
+                Console.WriteLine($"Favoriler yüklenirken hata oluþtu: {ex.Message}");
+                EmptyMessage = "Favoriler yüklenemedi.";
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        private async Task StartListeningForFavoritesAsync()
+        {
             var currentUser = await _authService.GetCurrentUserAsync();
             if (currentUser == null)
             {
-                IsLoading = false;
                 EmptyMessage = "Favorileri görmek için giriþ yapmalýsýnýz.";
                 return;
             }
@@ -82,17 +108,16 @@ namespace KamPay.ViewModels
                                 FavoriteItems.Remove(existingFav);
                             }
                         }
-
                         EmptyMessage = FavoriteItems.Any() ? string.Empty : "Henüz favori ürününüz yok.";
-                        IsLoading = false;
                     });
                 });
         }
+
         [RelayCommand]
         private async Task ProductTappedAsync(Favorite favorite)
         {
             if (favorite == null) return;
-            await Shell.Current.GoToAsync($"ProductDetailPage?productId={favorite.ProductId}");
+            await Shell.Current.GoToAsync($"{nameof(ProductDetailPage)}?productId={favorite.ProductId}");
         }
 
         [RelayCommand]
@@ -100,14 +125,16 @@ namespace KamPay.ViewModels
         {
             if (favorite == null) return;
             var currentUser = await _authService.GetCurrentUserAsync();
-            await _favoriteService.RemoveFromFavoritesAsync(currentUser.UserId, favorite.ProductId);
-            // Anlýk dinleyici sayesinde liste otomatik güncellenecek
+            if (currentUser != null)
+            {
+                await _favoriteService.RemoveFromFavoritesAsync(currentUser.UserId, favorite.ProductId);
+            }
         }
 
         public void Dispose()
         {
             _favoritesSubscription?.Dispose();
+            _isInitialized = false; // Sayfadan çýkýldýðýnda yeniden yüklenebilmesi için sýfýrla
         }
-
     }
 }

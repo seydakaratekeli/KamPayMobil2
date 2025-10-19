@@ -25,6 +25,8 @@ public class GoodDeedPost
     public int CommentCount { get; set; }
     public string? ContactInfo { get; set; }
 
+    public Dictionary<string, Comment> Comments { get; set; } = new Dictionary<string, Comment>();
+
     [JsonIgnore] // <-- Bu attribute, özelliðin Firebase'e kaydedilmesini engeller.
     public bool IsOwner { get; set; }
 

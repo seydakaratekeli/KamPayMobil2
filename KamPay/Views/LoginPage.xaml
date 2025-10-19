@@ -27,10 +27,10 @@
                                FontAttributes="Bold"
                                TextColor="#333"
                                FontSize="14" />
-                        <Label Text="E-posta: Ahmetakar@bartin.edu.tr"
+                        <Label Text="E-posta: Mehmetakar@bartin.edu.tr"
                                FontSize="13"
                                TextColor="#555" />
-                        <Label Text="Şifre: Ahmet1234"
+                        <Label Text="Şifre: Mehmet1234"
                                FontSize="13"
                                TextColor="#555" />
                     </VerticalStackLayout>
@@ -47,10 +47,10 @@
                                FontAttributes="Bold"
                                TextColor="#333"
                                FontSize="14" />
-                        <Label Text="E-posta: Ayseguler@bartin.edu.tr"
+                        <Label Text="E-posta: Elifguler@bartin.edu.tr"
                                FontSize="13"
                                TextColor="#555" />
-                        <Label Text="Şifre: Ayse1234"
+                        <Label Text="Şifre: Elif1234"
                                FontSize="13"
                                TextColor="#555" />
                     </VerticalStackLayout>

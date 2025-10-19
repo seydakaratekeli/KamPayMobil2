@@ -48,6 +48,12 @@ namespace KamPay.ViewModels
         [ObservableProperty]
         private bool showExchangeField;
 
+        [ObservableProperty]
+        private bool isForSurpriseBox;
+
+        public bool IsDonationTypeSelected => SelectedType == ProductType.Bagis;
+
+
         public ObservableCollection<Category> Categories { get; } = new();
         public ObservableCollection<string> ImagePaths { get; } = new();
 
@@ -79,11 +85,20 @@ namespace KamPay.ViewModels
             ShowPriceField = value == ProductType.Satis;
             ShowExchangeField = value == ProductType.Takas;
 
+            // "Baðýþ" seçeneði deðiþtiðinde arayüzün güncellenmesi için haber ver
+            OnPropertyChanged(nameof(IsDonationTypeSelected));
+
             if (value != ProductType.Satis)
             {
                 Price = 0;
             }
+            // Eðer seçilen tür "Baðýþ" deðilse, Sürpriz Kutu seçeneðini de sýfýrla
+            if (value != ProductType.Bagis)
+            {
+                IsForSurpriseBox = false;
+            }
         }
+
 
         private async void LoadCategoriesAsync()
         {
@@ -214,7 +229,8 @@ namespace KamPay.ViewModels
                     Price = Price,
                     Location = Location,
                     ExchangePreference = ExchangePreference,
-                    ImagePaths = ImagePaths.ToList()
+                    ImagePaths = ImagePaths.ToList(),
+                    IsForSurpriseBox = this.IsForSurpriseBox
                 };
 
                 // Ürünü ekle

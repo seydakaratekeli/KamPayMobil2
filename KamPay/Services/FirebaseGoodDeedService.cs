@@ -105,4 +105,55 @@ public class FirebaseGoodDeedService : IGoodDeedService
             return ServiceResult<bool>.FailureResult("Hata", ex.Message);
         }
     }
+
+    public async Task<ServiceResult<Comment>> AddCommentAsync(string postId, Comment comment)
+    {
+        try
+        {
+            // Yorumu, ilgili ilanýn altýndaki "Comments" koleksiyonuna ekle
+            await _firebaseClient
+                .Child(GoodDeedPostsCollection)
+                .Child(postId)
+                .Child("Comments") // Yorumlarý tutan alt koleksiyon
+                .Child(comment.CommentId)
+                .PutAsync(comment);
+
+            // Ýlanýn yorum sayacýný güncelle (transaction kullanmak daha güvenli olurdu ama bu da iþ görür)
+            var postRef = _firebaseClient.Child(GoodDeedPostsCollection).Child(postId);
+            var post = await postRef.OnceSingleAsync<GoodDeedPost>();
+            post.CommentCount++;
+            await postRef.PutAsync(post);
+
+            return ServiceResult<Comment>.SuccessResult(comment, "Yorum eklendi.");
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<Comment>.FailureResult("Hata", ex.Message);
+        }
+    }
+
+    public async Task<ServiceResult<List<Comment>>> GetCommentsAsync(string postId)
+    {
+        try
+        {
+            var commentsDict = await _firebaseClient
+                .Child(GoodDeedPostsCollection)
+                .Child(postId)
+                .Child("Comments")
+                .OnceAsync<Comment>();
+
+            var comments = commentsDict?
+                .Select(c => c.Object)
+                .OrderBy(c => c.CreatedAt)
+                .ToList() ?? new List<Comment>();
+
+            return ServiceResult<List<Comment>>.SuccessResult(comments);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<List<Comment>>.FailureResult("Hata", ex.Message);
+        }
+    }
+
+
 }

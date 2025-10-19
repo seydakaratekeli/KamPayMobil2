@@ -45,6 +45,7 @@ namespace KamPay.Services
                     Points = 0, // Başlangıç puanı
                     CompletedTrades = 0,
                     DonationsMade = 0,
+                    TimeCredits = 0, // Her yeni kullanıcıya 0 zaman kredisiyle başlat
                     ItemsShared = 0
                     // Diğer istatistik alanları varsayılan olarak 0 olacak
                 };
@@ -241,7 +242,47 @@ namespace KamPay.Services
             }
         }
 
-       
+        // YENİ METODU IMPLEMENTE EDİN
+        public async Task<ServiceResult<bool>> TransferTimeCreditsAsync(string fromUserId, string toUserId, int amount, string reason)
+        {
+            try
+            {
+                // İki kullanıcının da istatistiklerini al
+                var fromUserStatsResult = await GetUserStatsAsync(fromUserId);
+                var toUserStatsResult = await GetUserStatsAsync(toUserId);
+
+                if (!fromUserStatsResult.Success || !toUserStatsResult.Success)
+                {
+                    return ServiceResult<bool>.FailureResult("Kullanıcı istatistikleri alınamadı.");
+                }
+
+                var fromUserStats = fromUserStatsResult.Data;
+                var toUserStats = toUserStatsResult.Data;
+
+                // Hizmeti alan kişinin yeterli kredisi var mı? (Opsiyonel ama önerilir)
+                if (fromUserStats.TimeCredits < amount)
+                {
+                    return ServiceResult<bool>.FailureResult("Yetersiz zaman kredisi.");
+                }
+
+                // Kredi transferini yap
+                fromUserStats.TimeCredits -= amount;
+                toUserStats.TimeCredits += amount;
+
+                // İki kullanıcının da istatistiklerini güncelle
+                await UpdateUserStatsAsync(fromUserStats);
+                await UpdateUserStatsAsync(toUserStats);
+
+                // TODO: Bu önemli işlemi bir "transaction_history" koleksiyonuna kaydetmek,
+                // projenizin güvenilirliğini artırır. Raporunuzda bundan bahsedebilirsiniz.
+
+                return ServiceResult<bool>.SuccessResult(true, "Kredi transferi başarılı.");
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<bool>.FailureResult("Kredi transferi sırasında hata oluştu.", ex.Message);
+            }
+        }
         // MEVCUT KODUNUZ (DEĞİŞİKLİK YOK)
         public async Task<ServiceResult<bool>> CheckAndAwardBadgesAsync(string userId)
         {

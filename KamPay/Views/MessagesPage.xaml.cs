@@ -1,6 +1,6 @@
+// KamPay/Views/MessagesPage.xaml.cs
+
 using KamPay.ViewModels;
-using CommunityToolkit.Mvvm.Messaging;
-using System; // IDisposable için eklendi
 
 namespace KamPay.Views;
 
@@ -12,14 +12,17 @@ public partial class MessagesPage : ContentPage
         BindingContext = vm;
     }
 
+    // YENÝ: OnAppearing metodu eklendi
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        // Bu sayfa göründüðünde, okunmamýþ mesaj rozetini gizlemesi için sinyal gönder.
-        WeakReferenceMessenger.Default.Send(new UnreadMessageStatusMessage(false));
+        if (BindingContext is MessagesViewModel vm && vm.InitializeCommand.CanExecute(null))
+        {
+            vm.InitializeCommand.Execute(null);
+        }
     }
 
-    // --- YENÝ EKLENEN KISIM ---
+    // Mevcut OnDisappearing metodu AYNEN KALIYOR
     protected override void OnDisappearing()
     {
         base.OnDisappearing();

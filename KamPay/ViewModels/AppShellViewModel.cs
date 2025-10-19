@@ -1,16 +1,17 @@
+// KamPay/ViewModels/AppShellViewModel.cs
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
-using KamPay.Services; 
-using KamPay.Helpers; 
+using KamPay.Services;
+using KamPay.Helpers;
 using Firebase.Database;
-using Firebase.Database.Query; 
-using System.Reactive.Linq; 
-using KamPay.Models; 
-
+using Firebase.Database.Query;
+using System.Reactive.Linq;
+using KamPay.Models;
 
 namespace KamPay.ViewModels
 {
-    public partial class AppShellViewModel : ObservableObject
+    public partial class AppShellViewModel : ObservableObject, IDisposable
     {
         [ObservableProperty]
         private bool hasUnreadNotifications;
@@ -22,29 +23,34 @@ namespace KamPay.ViewModels
         private readonly IMessagingService _messagingService;
         private IDisposable? _messageSubscription;
 
+        // FirebaseClient'ý her seferinde yeniden oluþturmak yerine bir kere oluþturup kullanmak daha verimlidir.
+        private readonly FirebaseClient _firebaseClient = new(Constants.FirebaseRealtimeDbUrl);
+
+
         public AppShellViewModel(IAuthenticationService authService, IMessagingService messagingService)
         {
             _authService = authService;
             _messagingService = messagingService;
 
-            // Genel bildirimleri dinle 
+            // Genel bildirimleri dinle
             WeakReferenceMessenger.Default.Register<UnreadGeneralNotificationStatusMessage>(this, (r, m) =>
             {
                 HasUnreadNotifications = m.Value;
             });
 
-            // Mesaj bildirimlerini dinle
+            // Mesaj bildirimlerini dinle (Bu mesaj þu anki kodda kullanýlmýyor, ancak gelecekte kullanýlabilir)
             WeakReferenceMessenger.Default.Register<UnreadMessageStatusMessage>(this, (r, m) =>
             {
                 HasUnreadMessages = m.Value;
             });
 
-            // Kullanýcý giriþ / çýkýþ yaptýðýnda dinleyiciyi baþlat / durdur
-            WeakReferenceMessenger.Default.Register<UserSessionChangedMessage>(this, (r, m) =>
+            // GÜNCELLENDÝ: Kullanýcý giriþ / çýkýþ yaptýðýnda asenkron olarak tepki ver
+            WeakReferenceMessenger.Default.Register<UserSessionChangedMessage>(this, async (r, m) =>
             {
                 if (m.Value) // Giriþ yapýldý
                 {
-                    StartListeningForMessages();
+                    // Artýk metodu güvenle 'await' edebiliriz
+                    await StartListeningForMessagesAsync();
                 }
                 else // Çýkýþ yapýldý
                 {
@@ -53,7 +59,9 @@ namespace KamPay.ViewModels
                 }
             });
         }
-        private async void StartListeningForMessages()
+
+        // GÜNCELLENDÝ: Metodun imzasý async Task olarak deðiþtirildi
+        private async Task StartListeningForMessagesAsync()
         {
             StopListeningForMessages(); // Önceki dinleyiciyi durdur
 
@@ -62,19 +70,18 @@ namespace KamPay.ViewModels
 
             // Uygulama açýldýðýnda ilk kontrolü yap
             var initialCheckResult = await _messagingService.GetTotalUnreadMessageCountAsync(currentUser.UserId);
-            if (initialCheckResult.Success && initialCheckResult.Data > 0)
+            if (initialCheckResult.Success)
             {
-                HasUnreadMessages = true;
+                HasUnreadMessages = initialCheckResult.Data > 0;
             }
 
             // Gerçek zamanlý dinleyiciyi baþlat
-            var firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
-            _messageSubscription = firebaseClient
+            _messageSubscription = _firebaseClient
                 .Child(Constants.ConversationsCollection)
                 .AsObservable<Conversation>()
                 .Where(e => e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate &&
-                            e.Object != null &&
-                            (e.Object.User1Id == currentUser.UserId || e.Object.User2Id == currentUser.UserId))
+                             e.Object != null &&
+                             (e.Object.User1Id == currentUser.UserId || e.Object.User2Id == currentUser.UserId))
                 .Subscribe(async entry =>
                 {
                     // Kullanýcýya ait bir konuþma güncellendiðinde, toplam okunmamýþ sayýsýný yeniden kontrol et
@@ -94,9 +101,20 @@ namespace KamPay.ViewModels
             _messageSubscription?.Dispose();
             _messageSubscription = null;
         }
+
+        public void Dispose()
+        {
+            // Bellekte kalan abonelikleri temizle
+            StopListeningForMessages();
+            WeakReferenceMessenger.Default.UnregisterAll(this);
+        }
     }
 
-        public class UnreadGeneralNotificationStatusMessage : CommunityToolkit.Mvvm.Messaging.Messages.ValueChangedMessage<bool>
+    // --- Mesaj Sýnýflarý ---
+    // Bu sýnýflarýn ayrý bir dosyada olmasý daha temiz bir yapý saðlar,
+    // ancak þimdilik burada kalabilirler.
+
+    public class UnreadGeneralNotificationStatusMessage : CommunityToolkit.Mvvm.Messaging.Messages.ValueChangedMessage<bool>
     {
         public UnreadGeneralNotificationStatusMessage(bool value) : base(value) { }
     }
@@ -105,6 +123,7 @@ namespace KamPay.ViewModels
     {
         public UnreadMessageStatusMessage(bool value) : base(value) { }
     }
+
     public class UserSessionChangedMessage : CommunityToolkit.Mvvm.Messaging.Messages.ValueChangedMessage<bool>
     {
         public UserSessionChangedMessage(bool isLoggedIn) : base(isLoggedIn) { }

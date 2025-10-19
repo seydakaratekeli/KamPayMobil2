@@ -133,12 +133,17 @@ public class FirebaseProductService : IProductService
             {
                 return ServiceResult<Product>.FailureResult("Ürün bilgileri geçersiz", validation.Errors.ToArray());
             }
+            // Kategori adýný önceden alalým
+            var categories = await GetCategoriesAsync();
+            var categoryName = categories.Data?.FirstOrDefault(c => c.CategoryId == request.CategoryId)?.Name ?? "Bilinmeyen";
 
             var product = new Product
             {
+                ProductId = Guid.NewGuid().ToString(), // ID'yi burada oluþturmak daha güvenli
                 Title = request.Title.Trim(),
                 Description = request.Description.Trim(),
                 CategoryId = request.CategoryId,
+                CategoryName = categoryName,
                 Condition = request.Condition,
                 Type = request.Type,
                 Price = request.Price,
@@ -149,16 +154,20 @@ public class FirebaseProductService : IProductService
                 UserName = currentUser.FullName,
                 UserEmail = currentUser.Email,
                 UserPhotoUrl = currentUser.ProfileImageUrl,
-                ExchangePreference = request.ExchangePreference?.Trim()
+                ExchangePreference = request.ExchangePreference?.Trim(),
+                // --- EKSÝK SATIRI BURAYA EKLEYÝN ---
+                IsForSurpriseBox = request.IsForSurpriseBox,
+
+                // Durum bilgilerini ayarlýyoruz
+                IsActive = true,
+                IsSold = false,
+                IsReserved = false,
+                CreatedAt = DateTime.UtcNow
             };
 
-            var categories = await GetCategoriesAsync();
-            var category = categories.Data?.FirstOrDefault(c => c.CategoryId == request.CategoryId);
-            if (category != null)
-            {
-                product.CategoryName = category.Name;
-            }
 
+
+            // --- RESÝM YÜKLEME KODU ---
             if (request.ImagePaths != null && request.ImagePaths.Any())
             {
                 var imageUrls = new List<string>();
@@ -177,6 +186,7 @@ public class FirebaseProductService : IProductService
                 }
             }
 
+            // Ürünü veritabanýna kaydet
             await _firebaseClient
                 .Child(Constants.ProductsCollection)
                 .Child(product.ProductId)

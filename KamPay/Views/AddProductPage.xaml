@@ -69,7 +69,6 @@
                         Title="Kategori Seçin" />
             </Frame>
 
-            <!-- Ürün Tipi -->
             <Label Text="Ürün Tipi *" 
                    FontSize="16" 
                    FontAttributes="Bold"
@@ -82,17 +81,17 @@
                         SelectedItem="{Binding SelectedType}"
                         FontSize="16"
                         Title="Tip Seçin">
-                    <Picker.ItemDisplayBinding>
-                        <Binding>
-                            <Binding.Converter>
-                                <conv:ProductTypeConverter />
-                            </Binding.Converter>
-                        </Binding>
-                    </Picker.ItemDisplayBinding>
                 </Picker>
             </Frame>
-
-            <!-- Fiyat (Satılık ise) -->
+            <StackLayout Orientation="Horizontal" Padding="5, 10" 
+                         IsVisible="{Binding IsDonationTypeSelected}">
+                <Label Text="Bu ürünü Sürpriz Kutu'ya bağışla" 
+                       VerticalOptions="Center"
+                       TextColor="#333"/>
+                <Switch IsToggled="{Binding IsForSurpriseBox}" 
+                        HorizontalOptions="EndAndExpand"
+                        OnColor="#4CAF50"/>
+            </StackLayout>
             <Frame IsVisible="{Binding ShowPriceField}"
                    Padding="0" 
                    BorderColor="#E0E0E0"

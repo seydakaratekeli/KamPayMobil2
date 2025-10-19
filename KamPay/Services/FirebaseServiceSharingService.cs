@@ -13,12 +13,14 @@ namespace KamPay.Services
     {
         private readonly FirebaseClient _firebaseClient;
         private readonly INotificationService _notificationService; // Bildirim servisini ekleyin
+        private readonly IUserProfileService _userProfileService; // YENÝ SERVÝS
 
         // Constructor'ý INotificationService alacak þekilde güncelleyin
-        public FirebaseServiceSharingService(INotificationService notificationService)
+        public FirebaseServiceSharingService(INotificationService notificationService, IUserProfileService userProfileService)
         {
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
             _notificationService = notificationService;
+            _userProfileService = userProfileService; // Ata
         }
 
         // ... CreateServiceOfferAsync ve GetServiceOffersAsync metotlarý ayný kalacak ...
@@ -74,7 +76,8 @@ namespace KamPay.Services
                     ProviderId = offer.ProviderId,
                     RequesterId = requester.UserId,
                     RequesterName = requester.FullName,
-                    Message = message
+                    Message = message,
+                    TimeCreditValue = offer.TimeCredits // YENÝ: Kredi deðerini kaydet
                 };
 
                 await _firebaseClient
@@ -99,27 +102,106 @@ namespace KamPay.Services
                 return ServiceResult<ServiceRequest>.FailureResult("Talep gönderilirken hata oluþtu.", ex.Message);
             }
         }
+        // YENÝ METODU IMPLEMENTE EDÝN
+        public async Task<ServiceResult<bool>> CompleteRequestAsync(string requestId, string currentUserId)
+        {
+            try
+            {
+                var requestNode = _firebaseClient.Child(Constants.ServiceRequestsCollection).Child(requestId);
+                var request = await requestNode.OnceSingleAsync<ServiceRequest>();
 
+                if (request == null) return ServiceResult<bool>.FailureResult("Talep bulunamadý.");
+
+                // Sadece hizmeti talep eden kiþi tamamlandý olarak iþaretleyebilir
+                if (request.RequesterId != currentUserId)
+                    return ServiceResult<bool>.FailureResult("Bu iþlemi yapmaya yetkiniz yok.");
+
+                if (request.Status != ServiceRequestStatus.Accepted)
+                    return ServiceResult<bool>.FailureResult("Bu talep henüz onaylanmamýþ veya zaten tamamlanmýþ.");
+
+                // 1. Kredi transferini yap
+                var transferResult = await _userProfileService.TransferTimeCreditsAsync(
+                    request.RequesterId,
+                    request.ProviderId,
+                    request.TimeCreditValue,
+                    $"Hizmet tamamlandý: {request.ServiceTitle}"
+                );
+
+                if (!transferResult.Success)
+                {
+                    return ServiceResult<bool>.FailureResult($"Kredi transferi baþarýsýz: {transferResult.Message}");
+                }
+
+                // 2. Talebin durumunu güncelle
+                request.Status = ServiceRequestStatus.Completed;
+                await requestNode.PutAsync(request);
+
+                // 3. Hizmeti sunan kiþiye bildirim gönder
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserId = request.ProviderId,
+                    Title = "Hizmet Tamamlandý ve Kredi Kazandýn!",
+                    Message = $"{request.RequesterName}, '{request.ServiceTitle}' hizmetini tamamlandý olarak iþaretledi. Hesabýna {request.TimeCreditValue} saat kredi eklendi."
+                });
+
+                return ServiceResult<bool>.SuccessResult(true, "Hizmet baþarýyla tamamlandý.");
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<bool>.FailureResult("Ýþlem sýrasýnda hata oluþtu.", ex.Message);
+            }
+        }
         // Bu metot þu an kullanýlmýyor ama ileride "Taleplerim" sayfasý için gerekecek.
         public async Task<ServiceResult<List<ServiceRequest>>> GetMyServiceRequestsAsync(string userId)
         {
             try
             {
-                var requests = await _firebaseClient
+                // 1. Bana gelen talepleri çek (Benim Provider olduðum talepler)
+                var incomingRequestsTask = _firebaseClient
                     .Child(Constants.ServiceRequestsCollection)
                     .OrderBy("ProviderId")
                     .EqualTo(userId)
                     .OnceAsync<ServiceRequest>();
 
-                var list = requests.Select(r => r.Object).OrderByDescending(r => r.RequestedAt).ToList();
-                return ServiceResult<List<ServiceRequest>>.SuccessResult(list);
+                // 2. Benim gönderdiðim talepleri çek (Benim Requester olduðum talepler)
+                var outgoingRequestsTask = _firebaseClient
+                    .Child(Constants.ServiceRequestsCollection)
+                    .OrderBy("RequesterId")
+                    .EqualTo(userId)
+                    .OnceAsync<ServiceRequest>();
+
+                // Ýki sorguyu ayný anda çalýþtýrarak zaman kazan
+                await Task.WhenAll(incomingRequestsTask, outgoingRequestsTask);
+
+                var incomingRequests = incomingRequestsTask.Result;
+                var outgoingRequests = outgoingRequestsTask.Result;
+
+                // Ýki listeyi birleþtir
+                var allRequests = new List<ServiceRequest>();
+
+                if (incomingRequests != null)
+                {
+                    allRequests.AddRange(incomingRequests.Select(r => r.Object));
+                }
+                if (outgoingRequests != null)
+                {
+                    allRequests.AddRange(outgoingRequests.Select(r => r.Object));
+                }
+
+                // Yinelenen talepleri (eðer varsa) kaldýr ve tarihe göre sýrala
+                var distinctRequests = allRequests
+                    .GroupBy(r => r.RequestId)
+                    .Select(g => g.First())
+                    .OrderByDescending(r => r.RequestedAt)
+                    .ToList();
+
+                return ServiceResult<List<ServiceRequest>>.SuccessResult(distinctRequests);
             }
             catch (Exception ex)
             {
                 return ServiceResult<List<ServiceRequest>>.FailureResult("Talepler alýnamadý.", ex.Message);
             }
         }
-
         // Bu metot þu an kullanýlmýyor ama ileride talepleri yanýtlarken gerekecek.
         public async Task<ServiceResult<bool>> RespondToRequestAsync(string requestId, bool accept)
         {

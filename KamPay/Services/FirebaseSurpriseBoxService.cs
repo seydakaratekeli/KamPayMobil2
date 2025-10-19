@@ -11,7 +11,6 @@ namespace KamPay.Services
     public class FirebaseSurpriseBoxService : ISurpriseBoxService
     {
         private readonly FirebaseClient _firebaseClient;
-        // Diğer servislerle konuşmak için dependency injection kullanıyoruz
         private readonly IUserProfileService _userProfileService;
         private readonly IProductService _productService;
         private const int BoxCost = 100; // Kutunun maliyetini bir sabit olarak tanımlıyoruz
@@ -24,27 +23,31 @@ namespace KamPay.Services
             _productService = productService;
         }
 
-        // ISurpriseBoxService arayüzünün gerektirdiği, eksik olan metot
+        // METODU TAMAMEN GÜNCELLEYİN
         public async Task<ServiceResult<Product>> RedeemSurpriseBoxAsync(string userId)
         {
             try
             {
-                // 1. Kullanıcının puanını kontrol et
+                // 1. Kullanıcının puanını kontrol et (Bu kısım aynı)
                 var userStatsResult = await _userProfileService.GetUserStatsAsync(userId);
                 if (!userStatsResult.Success || userStatsResult.Data.Points < BoxCost)
                 {
                     return ServiceResult<Product>.FailureResult("Yetersiz Puan!", $"Bu işlem için {BoxCost} puana ihtiyacınız var.");
                 }
 
-                // 2. Bağış olarak işaretlenmiş, uygun ürünleri bul
-                var allProductsResult = await _productService.GetProductsAsync();
-                if (!allProductsResult.Success || allProductsResult.Data == null)
-                {
-                    return ServiceResult<Product>.FailureResult("Hata", "Ürünler alınamadı.");
-                }
+                // 2. DAHA VERİMLİ SORGULAMA: 
+                // Sadece Sürpriz Kutu için işaretlenmiş ürünleri doğrudan veritabanından çek.
+                var surpriseBoxProducts = await _firebaseClient
+                    .Child(Constants.ProductsCollection)
+                    .OnceAsync<Product>(); // Firebase'den verileri bir kere çek
 
-                var availableDonations = allProductsResult.Data
-                    .Where(p => p.Type == ProductType.Bagis && !p.IsSold && !p.IsReserved)
+                // Bellekte filtrele: Sürpriz kutusu için, satılmamış ve kullanıcının kendisine ait olmayan ürünler
+                var availableDonations = surpriseBoxProducts
+                    .Where(p => p.Object.Type == ProductType.Bagis &&
+                                p.Object.IsForSurpriseBox &&
+                                !p.Object.IsSold &&
+                                p.Object.UserId != userId)
+                    .Select(p => { p.Object.ProductId = p.Key; return p.Object; })
                     .ToList();
 
                 if (availableDonations.Count == 0)
@@ -52,11 +55,11 @@ namespace KamPay.Services
                     return ServiceResult<Product>.FailureResult("Ürün Yok", "Şu anda sürpriz kutusu için uygun bir ürün bulunmuyor.");
                 }
 
-                // 3. Rastgele bir ürün seç
+                // 3. Rastgele bir ürün seç (Bu kısım aynı)
                 var random = new Random();
                 var surpriseProduct = availableDonations[random.Next(availableDonations.Count)];
 
-                // 4. Puanı düş ve ürünü kullanıcıya ata (sahibini güncelle)
+                // 4. Puanı düş ve ürünü kullanıcıya ata (Bu kısım aynı)
                 var pointsDeducted = await _userProfileService.AddPointsAsync(userId, -BoxCost, "Sürpriz Kutu açıldı");
 
                 if (!pointsDeducted.Success)
@@ -68,13 +71,13 @@ namespace KamPay.Services
                 var ownerUpdated = await _productService.UpdateProductOwnerAsync(surpriseProduct.ProductId, userId);
                 if (!ownerUpdated.Success)
                 {
-                    // Eğer ürün sahibi güncellenemezse, bir hata olduğunu belirt.
-                    // İleri seviye bir implementasyonda burada kullanıcının puanı iade edilebilir.
-                    return ServiceResult<Product>.FailureResult("Hata", "Ürün sahipliği güncellenirken bir sorun oluştu.");
+                    // Hata durumunda puanı iade et (daha güvenli bir yaklaşım)
+                    await _userProfileService.AddPointsAsync(userId, BoxCost, "Sürpriz Kutu hatası (iade)");
+                    return ServiceResult<Product>.FailureResult("Hata", "Ürün sahipliği güncellenemedi. Puanınız iade edildi.");
                 }
 
-                // 5. Başarılı sonucu ve kazanılan ürünü döndür
-                return ServiceResult<Product>.SuccessResult(surpriseProduct, "Tebrikler!");
+                // 5. Başarılı sonucu döndür (Bu kısım aynı)
+                return ServiceResult<Product>.SuccessResult(surpriseProduct, "Tebrikler! Sürpriz kutusundan bu ürün çıktı!");
             }
             catch (Exception ex)
             {

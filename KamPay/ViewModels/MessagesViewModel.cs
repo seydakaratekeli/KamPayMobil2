@@ -12,6 +12,7 @@ using Firebase.Database;
 using Firebase.Database.Query;
 using KamPay.Helpers;
 using System.Reactive.Linq;
+using KamPay.Views;
 
 namespace KamPay.ViewModels
 {
@@ -22,6 +23,7 @@ namespace KamPay.ViewModels
         private IDisposable _conversationsSubscription;
         private readonly FirebaseClient _firebaseClient = new(Constants.FirebaseRealtimeDbUrl);
         private User _currentUser;
+        private bool _isInitialized = false;
 
         [ObservableProperty]
         private bool isLoading = true;
@@ -39,18 +41,39 @@ namespace KamPay.ViewModels
         {
             _messagingService = messagingService;
             _authService = authService;
-
-            StartListeningForConversations();
+            // Constructor'daki bu çaðrýyý SÝLÝYORUZ:
+            // StartListeningForConversations();
         }
-
-        private async void StartListeningForConversations()
+        // YENÝ: Baþlatma komutu
+        [RelayCommand]
+        private async Task InitializeAsync()
         {
+            if (_isInitialized) return;
+
             IsLoading = true;
-            _currentUser = await _authService.GetCurrentUserAsync();
-            if (_currentUser == null)
+            try
+            {
+                await StartListeningForConversationsAsync();
+                _isInitialized = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Konuþmalar yüklenirken hata oluþtu: {ex.Message}");
+                EmptyMessage = "Konuþmalar yüklenemedi.";
+            }
+            finally
             {
                 IsLoading = false;
-                EmptyMessage = "Sohbetleri görmek için giriþ yapmalýsýnýz.";
+            }
+        }
+
+        // GÜNCELLENDÝ: Metodun imzasý async Task olarak deðiþtirildi
+        private async Task StartListeningForConversationsAsync()
+        {
+            var currentUser = await _authService.GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                EmptyMessage = "Mesajlarý görmek için giriþ yapmalýsýnýz.";
                 return;
             }
 
@@ -141,7 +164,12 @@ namespace KamPay.ViewModels
                 await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
             }
         }
-
+        [RelayCommand]
+        async Task GoToChatAsync(Conversation conversation)
+        {
+            if (conversation == null) return;
+            await Shell.Current.GoToAsync($"{nameof(ChatPage)}?conversationId={conversation.ConversationId}");
+        }
         public void Dispose()
         {
             _conversationsSubscription?.Dispose();

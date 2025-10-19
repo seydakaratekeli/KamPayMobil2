@@ -12,4 +12,7 @@ public interface IServiceSharingService
     Task<ServiceResult<ServiceRequest>> RequestServiceAsync(ServiceOffer offer, User requester, string message);
     Task<ServiceResult<List<ServiceRequest>>> GetMyServiceRequestsAsync(string userId); // Bana gelen talepler
     Task<ServiceResult<bool>> RespondToRequestAsync(string requestId, bool accept);
+
+    Task<ServiceResult<bool>> CompleteRequestAsync(string requestId, string currentUserId);
+
 }

@@ -63,8 +63,13 @@ namespace KamPay.Services
         /// </summary>
         Task<ServiceResult<UserBadge>> AwardBadgeAsync(string userId, string badgeId);
 
+        Task<ServiceResult<bool>> TransferTimeCreditsAsync(string fromUserId, string toUserId, int amount, string reason);
+
         // Not: UpdateUserStatsAsync metodu, puan/rozet ekleme iþlemleri tarafýndan dolaylý olarak
         // kullanýldýðý için genellikle doðrudan çaðrýlmaz. Ýhtiyaç halinde kullanýlabilir.
         Task<ServiceResult<bool>> UpdateUserStatsAsync(UserStats stats);
+    
+    
+    
     }
 }

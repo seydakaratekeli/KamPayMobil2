@@ -70,6 +70,8 @@ namespace KamPay.Models
         // Takas için
         public string ExchangePreference { get; set; }
 
+        public bool IsForSurpriseBox { get; set; } = false;
+
         public Product()
         {
             ProductId = Guid.NewGuid().ToString();
@@ -145,6 +147,7 @@ namespace KamPay.Models
         public double? Longitude { get; set; }
         public List<string> ImagePaths { get; set; } // Local paths
         public string ExchangePreference { get; set; }
+        public bool IsForSurpriseBox { get; set; }
 
         public ProductRequest()
         {
