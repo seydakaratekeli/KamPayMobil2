@@ -110,30 +110,34 @@ public class FirebaseGoodDeedService : IGoodDeedService
     {
         try
         {
-            // 1. Ýlgili ilaný veritabanýndan çek
-            var postNode = _firebaseClient.Child(GoodDeedPostsCollection).Child(postId);
-            var post = await postNode.OnceSingleAsync<GoodDeedPost>();
+            // createdAt ve commentId güvenliði
+            if (string.IsNullOrWhiteSpace(comment.CommentId))
+                comment.CommentId = Guid.NewGuid().ToString();
 
-            if (post == null)
-            {
-                return ServiceResult<Comment>.FailureResult("Yorum yapýlmak istenen ilan bulunamadý.");
-            }
+            if (comment.CreatedAt == default)
+                comment.CreatedAt = DateTime.UtcNow;
 
-            // 2. Yorumlar sözlüðü (Dictionary) boþsa oluþtur, deðilse yeni yorumu ekle
-            if (post.Comments == null)
-            {
-                post.Comments = new Dictionary<string, Comment>();
-            }
-            post.Comments[comment.CommentId] = comment;
+            var commentsNode = _firebaseClient
+                .Child(GoodDeedPostsCollection)
+                .Child(postId)
+                .Child("Comments");
 
-            // 3. Ýlanýn yorum sayacýný sözlükteki eleman sayýsýna göre güncelle
-            post.CommentCount = post.Comments.Count;
+            // 1) Yeni yorumu ayrý bir child olarak ekle (PostAsync kullan)
+            var postResult = await commentsNode.PostAsync(comment);
+            comment.CommentId = postResult.Key; // Firebase tarafýndan üretilen key'i sakla (güncelleme)
 
-            // 4. Ýlanýn tamamýný, güncellenmiþ yorum listesiyle birlikte tek bir iþlemde veritabanýna geri yaz
-            await postNode.PutAsync(post);
+            // 2) Tüm yorumlarý tekrar çek ve gerçek sayýyý hesapla
+            var allComments = await commentsNode.OnceAsync<Comment>();
+            var commentCount = allComments?.Count ?? 0;
 
-            // TODO: Ýlan sahibine yeni bir yorum yapýldýðýna dair bildirim gönderilebilir.
+            // 3) CommentCount alanýný güncelle
+            await _firebaseClient
+                .Child(GoodDeedPostsCollection)
+                .Child(postId)
+                .Child("CommentCount")
+                .PutAsync(commentCount);
 
+            // Opsiyonel: Eðer post objesi tutuluyorsa güncellemek istersin (viewmodel tarafý genelde yapýyor)
             return ServiceResult<Comment>.SuccessResult(comment, "Yorum eklendi.");
         }
         catch (Exception ex)
@@ -141,6 +145,7 @@ public class FirebaseGoodDeedService : IGoodDeedService
             return ServiceResult<Comment>.FailureResult("Yorum eklenirken bir hata oluþtu.", ex.Message);
         }
     }
+
     public async Task<ServiceResult<List<Comment>>> GetCommentsAsync(string postId)
     {
         try

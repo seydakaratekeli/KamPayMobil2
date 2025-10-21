@@ -1,13 +1,14 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+ï»¿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Firebase.Database;
-using KamPay.Helpers; // Constants için
+using Firebase.Database.Query;
+using KamPay.Helpers; // Constants iÃ§in
 using KamPay.Models;
 using KamPay.Services;
 using System.Collections.ObjectModel;
-using System.Linq; // FirstOrDefault için
-using System.Reactive.Linq; // AsObservable için
 using System.Diagnostics; 
+using System.Linq; // FirstOrDefault iÃ§in
+using System.Reactive.Linq; // AsObservable iÃ§in
 
 namespace KamPay.ViewModels
 {
@@ -15,9 +16,9 @@ namespace KamPay.ViewModels
     {
         private readonly IGoodDeedService _goodDeedService;
         private readonly IAuthenticationService _authService;
-        private readonly IUserProfileService _userProfileService; // Profil bilgisi için ekledik
+        private readonly IUserProfileService _userProfileService; // Profil bilgisi iÃ§in ekledik
         private readonly FirebaseClient _firebaseClient;
-        private IDisposable _postsSubscription; // Gerçek zamanlý dinleyici
+        private IDisposable _postsSubscription; // GerÃ§ek zamanlÄ± dinleyici
 
         [ObservableProperty]
         private string newCommentText;
@@ -44,11 +45,11 @@ namespace KamPay.ViewModels
             _authService = authService;
             _userProfileService = userProfileService; // Servisi ata
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
-            // Gerçek zamanlý dinleyiciyi baþlat
-            // Not: Bu metot artýk `async void` DEÐÝL.
-            // Sayfa açýldýðýnda OnAppearing ile tetiklenmesi daha doðru olur,
-            // ama þimdilik bu þekilde býrakabiliriz. 
-            // Daha önceki desenimize uymak için bunu da komut yapabiliriz.
+            // GerÃ§ek zamanlÄ± dinleyiciyi baÅŸlat
+            // Not: Bu metot artÄ±k `async void` DEÄžÄ°L.
+            // Sayfa aÃ§Ä±ldÄ±ÄŸÄ±nda OnAppearing ile tetiklenmesi daha doÄŸru olur,
+            // ama ÅŸimdilik bu ÅŸekilde bÄ±rakabiliriz. 
+            // Daha Ã¶nceki desenimize uymak iÃ§in bunu da komut yapabiliriz.
             // StartListeningForPosts();
         }
 
@@ -63,7 +64,7 @@ namespace KamPay.ViewModels
             {
                 if (string.IsNullOrWhiteSpace(Title) || string.IsNullOrWhiteSpace(Description))
                 {
-                    await Application.Current.MainPage.DisplayAlert("Uyarý", "Baþlýk ve açýklama gerekli", "Tamam");
+                    await Application.Current.MainPage.DisplayAlert("UyarÄ±", "BaÅŸlÄ±k ve aÃ§Ä±klama gerekli", "Tamam");
                     return;
                 }
 
@@ -88,7 +89,7 @@ namespace KamPay.ViewModels
                     Title = string.Empty;
                     Description = string.Empty;
 
-                    await Application.Current.MainPage.DisplayAlert("Baþarýlý", "Ýlan paylaþýldý!", "Tamam");
+                    await Application.Current.MainPage.DisplayAlert("BaÅŸarÄ±lÄ±", "Ä°lan paylaÅŸÄ±ldÄ±!", "Tamam");
                 }
             }
             catch (Exception ex)
@@ -120,9 +121,9 @@ namespace KamPay.ViewModels
             {
                 var confirm = await Application.Current.MainPage.DisplayAlert(
                     "Sil",
-                    "Bu ilaný silmek istediðinize emin misiniz?",
+                    "Bu ilanÄ± silmek istediÄŸinize emin misiniz?",
                     "Evet",
-                    "Hayýr"
+                    "HayÄ±r"
                 );
 
                 if (!confirm) return;
@@ -169,23 +170,27 @@ namespace KamPay.ViewModels
                             if (existingPost != null)
                             {
                                 var index = Posts.IndexOf(existingPost);
-                                // --- DÜZELTME BAÞLANGICI ---
-                                // Arayüzün güncellemeyi fark etmesi için eski ilaný kaldýrýp
-                                // güncel halini ayný pozisyona ekliyoruz.
+                                // --- DÃœZELTME BAÅžLANGICI ---
+                                // ArayÃ¼zÃ¼n gÃ¼ncellemeyi fark etmesi iÃ§in eski ilanÄ± kaldÄ±rÄ±p
+                                // gÃ¼ncel halini aynÄ± pozisyona ekliyoruz.
                                 Posts.RemoveAt(index);
                                 Posts.Insert(index, post);
+
                             }
                             else
                             {
-                                Posts.Insert(0, post); // Yeni ilaný baþa ekle
+                                Posts.Insert(0, post); // Yeni ilanÄ± baÅŸa ekle
                             }
+                            StartListeningForComments(post);
+
+
                         }
                         else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
                         {
                             if (existingPost != null) Posts.Remove(existingPost);
                         }
 
-                        // Sýralama her ihtimale karþý korunabilir
+                        // SÄ±ralama her ihtimale karÅŸÄ± korunabilir
                         var sortedPosts = Posts.OrderByDescending(p => p.CreatedAt).ToList();
                         Posts.Clear();
                         foreach (var p in sortedPosts) Posts.Add(p);
@@ -194,7 +199,7 @@ namespace KamPay.ViewModels
                     });
                 }, ex =>
                 {
-                    Debug.WriteLine($"[HATA] Ýyilik Panosu dinlenirken sorun oluþtu: {ex.Message}");
+                    Debug.WriteLine($"[HATA] Ä°yilik Panosu dinlenirken sorun oluÅŸtu: {ex.Message}");
                     MainThread.InvokeOnMainThreadAsync(() => IsLoading = false);
                 });
         }
@@ -203,12 +208,19 @@ namespace KamPay.ViewModels
         {
             _postsSubscription?.Dispose();
             _postsSubscription = null;
+
+            foreach (var sub in _commentSubscriptions.Values)
+                sub.Dispose();
+
+            _commentSubscriptions.Clear();
+
         }
 
         public void Dispose()
         {
             StopListening();
         }
+
         [RelayCommand]
         private async Task AddCommentAsync(GoodDeedPost post)
         {
@@ -224,15 +236,34 @@ namespace KamPay.ViewModels
                 PostId = post.PostId,
                 UserId = currentUser.UserId,
                 UserName = userProfile?.Data?.Username ?? currentUser.FullName,
-                UserProfileImageUrl = userProfile?.Data?.ProfileImageUrl ?? "person_icon.svg", // Varsayýlan bir ikon
-                Text = NewCommentText.Trim()
+                UserProfileImageUrl = userProfile?.Data?.ProfileImageUrl ?? "person_icon.svg",
+                Text = NewCommentText.Trim(),
+                CommentId = Guid.NewGuid().ToString(),
+                CreatedAt = DateTime.UtcNow
             };
 
             var result = await _goodDeedService.AddCommentAsync(post.PostId, comment);
 
             if (result.Success)
             {
-                NewCommentText = string.Empty; // Yorum kutusunu temizle
+                NewCommentText = string.Empty;
+
+                // ðŸŒŸ UIâ€™yi anÄ±nda gÃ¼ncelle
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    post.Comments ??= new Dictionary<string, Comment>();
+                    post.Comments[comment.CommentId] = comment;
+                    post.CommentCount = post.Comments.Count;
+
+                    // ObservableCollection iÃ§indeki post'u yenile
+                    var existing = Posts.FirstOrDefault(p => p.PostId == post.PostId);
+                    if (existing != null)
+                    {
+                        var index = Posts.IndexOf(existing);
+                        Posts.RemoveAt(index);
+                        Posts.Insert(index, post);
+                    }
+                });
             }
             else
             {
@@ -240,7 +271,63 @@ namespace KamPay.ViewModels
             }
         }
 
-      
-      
+        private readonly Dictionary<string, IDisposable> _commentSubscriptions = new();
+
+        private readonly SemaphoreSlim _commentLock = new(1, 1);
+
+        public void StartListeningForComments(GoodDeedPost post)
+        {
+            if (_commentSubscriptions.ContainsKey(post.PostId))
+                return;
+
+            var subscription = _firebaseClient
+                .Child("good_deed_posts")
+                .Child(post.PostId)
+                .Child("Comments")
+                .AsObservable<Comment>()
+                .Subscribe(async e =>
+                {
+                    await _commentLock.WaitAsync();
+                    try
+                    {
+                        if (e.Object == null || string.IsNullOrEmpty(e.Key))
+                            return;
+
+                        await MainThread.InvokeOnMainThreadAsync(() =>
+                        {
+                            post.Comments ??= new Dictionary<string, Comment>();
+
+                            if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
+                            {
+                                post.Comments[e.Key] = e.Object;
+                            }
+                            else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
+                            {
+                                if (post.Comments.ContainsKey(e.Key))
+                                    post.Comments.Remove(e.Key);
+                            }
+
+                            post.CommentCount = post.Comments.Count;
+
+                            // ðŸ§© ArayÃ¼z bindingâ€™ini yenilemek iÃ§in postâ€™u ObservableCollectionâ€™a tekrar ekle
+                            var existing = Posts.FirstOrDefault(p => p.PostId == post.PostId);
+                            if (existing != null)
+                            {
+                                var index = Posts.IndexOf(existing);
+                                Posts.RemoveAt(index);
+                                Posts.Insert(index, post);
+                            }
+                        });
+                    }
+                    finally
+                    {
+                        _commentLock.Release();
+                    }
+                });
+
+            _commentSubscriptions[post.PostId] = subscription;
+        }
+
+
     }
 }
