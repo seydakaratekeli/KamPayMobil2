@@ -18,7 +18,7 @@ namespace KamPay.Services
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
         }
 
-        // --- YENİ EKLENEN PROFİL YÖNETİM METOTLARI ---
+  
 
         /// <summary>
         /// Yeni kullanıcı için veritabanında profil ve başlangıç istatistiklerini oluşturur.

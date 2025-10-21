@@ -16,6 +16,7 @@
             
             <converters:StringIsNotNullOrEmptyConverter x:Key="StringIsNotNullOrEmptyConverter" />
             <converters:IntToBoolConverter x:Key="IntToBoolConverter" />
+            <converters:InvertedBoolConverter x:Key="InvertedBoolConverter" />
 
             <converters:ProductTypeToBadgeColorConverter x:Key="ProductTypeToBadgeColorConverter" />
             <converters:ProductTypeConverter x:Key="ProductTypeConverter" />

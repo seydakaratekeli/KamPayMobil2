@@ -26,11 +26,15 @@ public partial class ProfileViewModel : ObservableObject
     [ObservableProperty]
     private bool isRefreshing;
 
+    // ✅ YENİ EKLEME: Profil fotoğrafı kontrolü için
+    [ObservableProperty]
+    private bool hasProfileImage;
+
     public ObservableCollection<Product> MyProducts { get; } = new();
     public ObservableCollection<UserBadge> MyBadges { get; } = new();
 
-    public ProfileViewModel(IAuthenticationService authService, 
-        IProductService productService, 
+    public ProfileViewModel(IAuthenticationService authService,
+        IProductService productService,
         IUserProfileService profileService,
         IStorageService storageService)
     {
@@ -52,6 +56,22 @@ public partial class ProfileViewModel : ObservableObject
             CurrentUser = await _authService.GetCurrentUserAsync();
             if (CurrentUser == null) return;
 
+            // ✅ DÜZELTİLDİ: user_profiles'tan profil bilgilerini çek ve CurrentUser'a senkronize et
+            var profileResult = await _profileService.GetUserProfileAsync(CurrentUser.UserId);
+            if (profileResult.Success)
+            {
+                var userProfile = profileResult.Data;
+
+                // User nesnesini UserProfile'dan güncelle
+                CurrentUser.FirstName = userProfile.FirstName;
+                CurrentUser.LastName = userProfile.LastName;
+                CurrentUser.ProfileImageUrl = userProfile.ProfileImageUrl;
+                CurrentUser.Email = userProfile.Email;
+
+                // Profil fotoğrafı kontrolü
+                HasProfileImage = !string.IsNullOrWhiteSpace(userProfile.ProfileImageUrl);
+            }
+
             // İstatistikleri Yükle
             var statsResult = await _profileService.GetUserStatsAsync(CurrentUser.UserId);
             if (statsResult.Success)
@@ -60,7 +80,6 @@ public partial class ProfileViewModel : ObservableObject
             }
             else
             {
-                // Eğer istatistik yüklenemezse, boş bir nesne oluşturarak null hatasını önle
                 UserStats = new UserStats();
             }
 
@@ -73,7 +92,6 @@ public partial class ProfileViewModel : ObservableObject
                 {
                     MyProducts.Add(product);
                 }
-                // ===== DÜZELTME 1: Ürün sayısını manuel olarak güncelle =====
                 if (UserStats != null)
                 {
                     UserStats.TotalProducts = productsResult.Data.Count;
@@ -89,8 +107,6 @@ public partial class ProfileViewModel : ObservableObject
                 {
                     MyBadges.Add(badge);
                 }
-                // Not: Rozet sayısı için ayrı bir alan UserStats'ta yok,
-                // doğrudan MyBadges.Count kullandığımız için burası doğru çalışıyor.
             }
         }
         catch (Exception ex)
@@ -120,7 +136,7 @@ public partial class ProfileViewModel : ObservableObject
             return;
         }
 
-        // 🧩 1. Kullanıcıdan yeni isim bilgilerini alalım
+        // 1. Kullanıcıdan yeni isim bilgilerini alalım
         string newFirstName = await Application.Current.MainPage.DisplayPromptAsync(
             "Profil Güncelle",
             "Yeni adınızı girin:",
@@ -137,13 +153,13 @@ public partial class ProfileViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(newLastName))
             return;
 
-        // 🧩 2. Kullanıcıdan yeni kullanıcı adını al
+        // 2. Kullanıcıdan yeni kullanıcı adını al
         string newUsername = await Application.Current.MainPage.DisplayPromptAsync(
             "Profil Güncelle",
             "Yeni kullanıcı adınızı girin:",
             initialValue: CurrentUser.FirstName + CurrentUser.LastName);
 
-        // 🧩 3. İsteğe bağlı: Yeni profil fotoğrafı seçimi
+        // 3. İsteğe bağlı: Yeni profil fotoğrafı seçimi
         string uploadedImageUrl = null;
         bool changePhoto = await Application.Current.MainPage.DisplayAlert(
             "Profil Fotoğrafı",
@@ -162,11 +178,14 @@ public partial class ProfileViewModel : ObservableObject
 
                 if (file != null)
                 {
-                    // 🔹 Firebase Storage’a yükle
                     var uploadResult = await _storageService.UploadProfileImageAsync(file.FullPath, CurrentUser.UserId);
                     if (uploadResult.Success)
                     {
                         uploadedImageUrl = uploadResult.Data;
+                    }
+                    else
+                    {
+                        await Application.Current.MainPage.DisplayAlert("Hata", uploadResult.Message, "Tamam");
                     }
                 }
             }
@@ -180,24 +199,34 @@ public partial class ProfileViewModel : ObservableObject
 
         try
         {
-            // 🧩 4. Firebase üzerinde kullanıcıyı güncelle
+            // 4. ✅ DÜZELTİLDİ: user_profiles'ı güncelle
             var result = await _profileService.UpdateUserProfileAsync(
                 CurrentUser.UserId,
                 firstName: newFirstName,
                 lastName: newLastName,
                 username: newUsername,
-                profileImageUrl: uploadedImageUrl // 📸 foto seçildiyse ekle
+                profileImageUrl: uploadedImageUrl
             );
 
             if (result.Success)
             {
-                // 🧩 5. Yerel model güncelle
+                // 5. ✅ DÜZELTİLDİ: Local CurrentUser'ı HEMEN güncelle
                 CurrentUser.FirstName = newFirstName;
                 CurrentUser.LastName = newLastName;
+
                 if (!string.IsNullOrWhiteSpace(uploadedImageUrl))
+                {
                     CurrentUser.ProfileImageUrl = uploadedImageUrl;
+                    HasProfileImage = true;
+                }
+
+                // 6. ✅ KRİTİK: OnPropertyChanged ile UI'ı güncelle
+                OnPropertyChanged(nameof(CurrentUser));
 
                 await Application.Current.MainPage.DisplayAlert("Başarılı", "Profil güncellendi!", "Tamam");
+
+                // 7. ✅ Profili yeniden yükle (senkronizasyon için)
+                await LoadProfileAsync();
             }
             else
             {
@@ -217,7 +246,6 @@ public partial class ProfileViewModel : ObservableObject
     [RelayCommand]
     private async Task ViewAllProductsAsync()
     {
-        // Kendi ürünlerini görüntüle
         await Shell.Current.GoToAsync($"myproducts?userId={CurrentUser.UserId}");
     }
 
@@ -243,7 +271,7 @@ public partial class ProfileViewModel : ObservableObject
             {
                 Title = "Profilimi Paylaş",
                 Text = $"{CurrentUser.FullName}\n" +
-               $"🎯 {UserStats?.Points ?? 0} puan\n" + // DÜZELTİLDİ
+               $"🎯 {UserStats?.Points ?? 0} puan\n" +
                $"📦 {UserStats?.TotalProducts ?? 0} ürün\n" +
                $"🏆 {MyBadges.Count} rozet\n\n" +
                "KamPay ile paylaşıldı"
@@ -270,8 +298,6 @@ public partial class ProfileViewModel : ObservableObject
         try
         {
             await _authService.LogoutAsync();
-
-            // Login sayfasına yönlendir
             await Shell.Current.GoToAsync("//LoginPage");
         }
         catch (Exception ex)
@@ -298,5 +324,4 @@ public partial class ProfileViewModel : ObservableObject
         if (product == null) return;
         await Shell.Current.GoToAsync($"productdetail?productId={product.ProductId}");
     }
-
 }

@@ -24,14 +24,24 @@
                 <Frame Padding="20" CornerRadius="0" BackgroundColor="#4CAF50" BorderColor="Transparent">
                     <VerticalStackLayout Spacing="15">
 
-                        <!-- 🔹 Profile Image with Edit Icon -->
+                        <!-- 🔹 Profile Image with Edit Icon - DÜZELTİLDİ -->
                         <Grid HorizontalOptions="Center">
                             <Frame Padding="0" WidthRequest="100" HeightRequest="100" 
                                    CornerRadius="50" IsClippedToBounds="True" 
                                    BackgroundColor="White">
-                                <Label Text="{Binding CurrentUser.FullName, Converter={StaticResource FirstCharConverter}}" 
-                                       FontSize="40" FontAttributes="Bold" TextColor="#4CAF50" 
-                                       HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
+
+                                <!-- Profil fotoğrafı varsa göster, yoksa placeholder -->
+                                <Grid>
+                                    <Image Source="{Binding CurrentUser.ProfileImageUrl}" 
+                                           Aspect="AspectFill"
+                                           IsVisible="{Binding HasProfileImage}"/>
+
+                                    <!-- Placeholder - fotoğraf yoksa göster -->
+                                    <Label Text="{Binding CurrentUser.FullName, Converter={StaticResource FirstCharConverter}}" 
+                                           FontSize="40" FontAttributes="Bold" TextColor="#4CAF50" 
+                                           HorizontalTextAlignment="Center" VerticalTextAlignment="Center"
+                                           IsVisible="{Binding HasProfileImage, Converter={StaticResource InvertedBoolConverter}}" />
+                                </Grid>
                             </Frame>
 
                             <!-- Edit Icon on Profile Picture -->
