@@ -97,17 +97,46 @@
                                             <Label Text="{Binding ViewCount}" />
                                         </HorizontalStackLayout>
                                     </VerticalStackLayout>
+                                    
+                                    
+                                    
                                 </Grid>
-                                <Border IsVisible="{Binding IsReserved}" BackgroundColor="#99FF9800" Padding="10,5" HorizontalOptions="Start" VerticalOptions="Start" StrokeThickness="0">
+                                <!-- İlk overlay: REZERVE EDİLDİ -->
+                                <Border IsVisible="{Binding IsReserved}" 
+            BackgroundColor="#99FF9800" 
+            Padding="10,5" 
+            HorizontalOptions="Start" 
+            VerticalOptions="Start" 
+            StrokeThickness="0">
                                     <Border.StrokeShape>
                                         <RoundRectangle CornerRadius="0,0,15,0" />
                                     </Border.StrokeShape>
-                                    <Label Text="REZERVE EDİLDİ" TextColor="White" FontSize="10" FontAttributes="Bold"/>
+                                    <Label Text="{Binding StatusText}"
+               TextColor="White" 
+               FontSize="10" 
+               FontAttributes="Bold"/>
                                 </Border>
-                                <Border IsVisible="{Binding IsSold}" BackgroundColor="#994CAF50">
-                                    <Label Text="TAKAS YAPILDI" TextColor="White" FontSize="16" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center" />
+
+                                <!-- İkinci overlay: TAKAS YAPILDI -->
+                                <Border IsVisible="{Binding IsSold}" 
+            BackgroundColor="#CC4CAF50"
+            Padding="15"
+            HorizontalOptions="Fill"
+            VerticalOptions="Fill">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="10" />
+                                    </Border.StrokeShape>
+                                    <Label Text="{Binding StatusText}"
+               TextColor="White" 
+               FontSize="18" 
+               FontAttributes="Bold" 
+               HorizontalOptions="Center" 
+               VerticalOptions="Center" />
                                 </Border>
                             </Grid>
+                        
+                        
+                        
                         </Frame>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>

@@ -32,6 +32,7 @@ public class FirebaseProductService : IProductService
             }).AsQueryable(); // Sorgulanabilir hale getiriyoruz
 
             // Filtreleme
+            // Filtreleme
             if (filter != null)
             {
                 // Sadece aktif ürünler
@@ -39,6 +40,10 @@ public class FirebaseProductService : IProductService
                 {
                     productsQuery = productsQuery.Where(p => p.IsActive);
                 }
+
+                // 🔹 YENİ: Satılmış ürünleri göstermeyi AÇIK bırakıyoruz
+                // Anasayfada "TAKAS YAPILDI" etiketiyle görünsünler
+                // ❌ KALDIRILDI: ExcludeSold filtresi (zaten yorumlanmış)
 
                 // SATILMIŞ ÜRÜNLER FİLTRESİNİ DEVRE DIŞI BIRAKTIK
                 /*
@@ -396,6 +401,45 @@ public class FirebaseProductService : IProductService
             return ServiceResult<List<Product>>.FailureResult("Kullanıcının ürünleri alınamadı.", ex.Message);
         }
     }
+    /// <summary>
+    /// TAKAS işlemlerinde kullanılır - Ürün anasayfada kalır, "TAKAS YAPILDI" etiketi ile görünür
+    /// </summary>
+    public async Task<ServiceResult<bool>> MarkAsExchangedAsync(string productId)
+    {
+        try
+        {
+            var product = await _firebaseClient
+                .Child(Constants.ProductsCollection)
+                .Child(productId)
+                .OnceSingleAsync<Product>();
+
+            if (product == null)
+            {
+                return ServiceResult<bool>.FailureResult("Ürün bulunamadı");
+            }
+
+            // 🔹 Takas için: Görünür kalır
+            product.IsSold = true;
+            product.IsReserved = false;
+            product.SoldAt = DateTime.UtcNow;
+            // IsActive = true (değişmez)
+
+            await _firebaseClient
+                .Child(Constants.ProductsCollection)
+                .Child(productId)
+                .PutAsync(product);
+
+            return ServiceResult<bool>.SuccessResult(true, "Ürün takas yapıldı olarak işaretlendi");
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<bool>.FailureResult("İşlem başarısız", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// SATIŞ işlemlerinde kullanılır - Ürün anasayfadan kaldırılır
+    /// </summary>
     public async Task<ServiceResult<bool>> MarkAsSoldAsync(string productId)
     {
         try
@@ -410,8 +454,13 @@ public class FirebaseProductService : IProductService
                 return ServiceResult<bool>.FailureResult("Ürün bulunamadı");
             }
 
+            // 🔹 Satış için: Anasayfadan kaldır
             product.IsSold = true;
-            // 🔹 Ürün satıldığında aktif ürün sayısını azalt
+            product.IsReserved = false;
+            product.IsActive = false; // ❗ Önemli: Satışta pasif olur
+            product.SoldAt = DateTime.UtcNow;
+
+            // 🔹 Kullanıcının aktif ürün sayısını azalt
             var userStatsRef = _firebaseClient
                 .Child("user_stats")
                 .Child(product.UserId);
@@ -422,9 +471,6 @@ public class FirebaseProductService : IProductService
                 stats.TotalProducts--;
                 await userStatsRef.PutAsync(stats);
             }
-
-            product.SoldAt = DateTime.UtcNow;
-            product.IsActive = false;
 
             await _firebaseClient
                 .Child(Constants.ProductsCollection)
@@ -438,7 +484,6 @@ public class FirebaseProductService : IProductService
             return ServiceResult<bool>.FailureResult("İşlem başarısız", ex.Message);
         }
     }
-
     public async Task<ServiceResult<bool>> MarkAsReservedAsync(string productId, bool isReserved)
     {
         try

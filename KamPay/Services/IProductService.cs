@@ -17,15 +17,19 @@ namespace KamPay.Services
         Task<ServiceResult<Product>> GetProductByIdAsync(string productId);
         Task<ServiceResult<List<Product>>> GetAllProductsAsync(ProductFilter filter = null);
         Task<ServiceResult<List<Product>>> GetUserProductsAsync(string userId);
-        Task<ServiceResult<bool>> MarkAsSoldAsync(string productId);
-        Task<ServiceResult<bool>> MarkAsReservedAsync(string productId, bool isReserved);
-        Task<ServiceResult<bool>> IncrementViewCountAsync(string productId);
+      Task<ServiceResult<bool>> IncrementViewCountAsync(string productId);
         Task<ServiceResult<List<Category>>> GetCategoriesAsync();
         ValidationResult ValidateProduct(ProductRequest request);
         Task<ServiceResult<List<Product>>> GetProductsAsync(string categoryId = null, string searchText = null);
         Task<ServiceResult<bool>> UpdateProductOwnerAsync(string productId, string newOwnerId, bool markAsSold = true);
+        Task<ServiceResult<bool>> MarkAsSoldAsync(string productId); // SATIŞ için
+        Task<ServiceResult<bool>> MarkAsExchangedAsync(string productId); // TAKAS için
+        Task<ServiceResult<bool>> MarkAsReservedAsync(string productId, bool isReserved);
+
+
+
     }
 
-  
+
 
 }

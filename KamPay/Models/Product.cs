@@ -60,6 +60,48 @@ namespace KamPay.Models
         public DateTime? UpdatedAt { get; set; }
         public DateTime? SoldAt { get; set; }
 
+        /// <summary>
+        /// Ürünün durumunu belirler (Satış mı, Takas mı?)
+        /// </summary>
+        public string StatusText
+        {
+            get
+            {
+                if (IsSold && Type == ProductType.Takas)
+                    return "TAKAS YAPILDI ✓";
+
+                if (IsSold && Type == ProductType.Satis)
+                    return "SATILDI ✓";
+
+                if (IsReserved && Type == ProductType.Takas)
+                    return "REZERVE EDİLDİ";
+
+                if (IsReserved && Type == ProductType.Satis)
+                    return "SATIŞ BEKLİYOR";
+
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Etiket rengi
+        /// </summary>
+        public Color StatusColor
+        {
+            get
+            {
+                if (IsSold)
+                    return Color.FromArgb("#4CAF50"); // Yeşil
+
+                if (IsReserved)
+                    return Color.FromArgb("#FF9800"); // Turuncu
+
+                return Colors.Transparent;
+            }
+        }
+
+
+
         // İstatistikler
         [ObservableProperty]
         private int viewCount;
@@ -71,6 +113,7 @@ namespace KamPay.Models
         public string ExchangePreference { get; set; }
 
         public bool IsForSurpriseBox { get; set; } = false;
+
 
         public Product()
         {
