@@ -5,15 +5,24 @@ using KamPay.Services;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.IO; // Path.GetFileName için eklendi
+using Microsoft.Maui.Devices.Sensors; // EKLENDÝ
+using Microsoft.Maui.ApplicationModel; // EKLENDÝ
 
 namespace KamPay.ViewModels
 {
     public partial class AddProductViewModel : ObservableObject
     {
+        private readonly IReverseGeocodeService _reverseGeocodeService;
         private readonly IProductService _productService;
         private readonly IAuthenticationService _authService;
         private readonly IUserProfileService _userProfileService;
         private readonly ICategoryService _categoryService; // YENÝ: Kategoriler için
+
+        [ObservableProperty]
+        private double? latitude;
+
+        [ObservableProperty]
+        private double? longitude;
 
         [ObservableProperty]
         private string title;
@@ -70,16 +79,18 @@ namespace KamPay.ViewModels
 
         // CONSTRUCTOR'I GÜNCELLEYELÝM
         public AddProductViewModel(
-            IProductService productService,
+           IProductService productService,
             IAuthenticationService authService,
-            IUserProfileService userProfileService, // HATA DÜZELTMESÝ: Geri eklendi
-            IStorageService storageService, // Eklendi
-            ICategoryService categoryService) // Eklendi (IUserProfileService yerine þimdilik bu daha kritik)
+            IUserProfileService userProfileService,
+            IStorageService storageService,
+            ICategoryService categoryService,
+            IReverseGeocodeService reverseGeocodeService) // Parametre eklendi
         {
             _productService = productService;
             _authService = authService;
-            _userProfileService = userProfileService; // HATA DÜZELTMESÝ: Atama yapýldý
+            _userProfileService = userProfileService;
             _categoryService = categoryService;
+            _reverseGeocodeService = reverseGeocodeService; // Atama yapýldý
 
             // Varsayýlan deðerler
             SelectedCondition = ProductCondition.Iyi;
@@ -111,6 +122,55 @@ namespace KamPay.ViewModels
             }
         }
 
+        [RelayCommand]
+        private async Task UseCurrentLocationAsync()
+        {
+            if (IsLoading) return;
+            try
+            {
+                IsLoading = true;
+                ErrorMessage = string.Empty;
+                Location = "Konum alýnýyor, lütfen bekleyin...";
+
+                var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+                if (status != PermissionStatus.Granted)
+                {
+                    status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+                }
+
+                if (status != PermissionStatus.Granted)
+                {
+                    Location = string.Empty;
+                    await Shell.Current.DisplayAlert("Ýzin Gerekli", "Konum almak için uygulama ayarlarýna giderek izin vermeniz gerekmektedir.", "Tamam");
+                    return;
+                }
+
+                var request = new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(10));
+                var deviceLocation = await Geolocation.GetLocationAsync(request);
+
+                if (deviceLocation != null)
+                {
+                    Latitude = deviceLocation.Latitude;
+                    Longitude = deviceLocation.Longitude;
+
+                    // Adres çözümleme iþi artýk servisimize ait
+                    Location = await _reverseGeocodeService.GetAddressForLocation(deviceLocation);
+                }
+                else
+                {
+                    Location = "Konum bilgisi alýnamadý. GPS'inizin açýk olduðundan emin olun.";
+                }
+            }
+            catch (Exception ex)
+            {
+                Location = "Konum alýnýrken bir hata oluþtu.";
+                System.Diagnostics.Debug.WriteLine($"Konum Hatasý: {ex.Message}");
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
 
         [RelayCommand]
         private async Task LoadCategoriesAsync()
@@ -189,34 +249,6 @@ namespace KamPay.ViewModels
             }
         }
 
-        [RelayCommand]
-        private async Task UseCurrentLocationAsync()
-        {
-            try
-            {
-                var location = await Geolocation.GetLastKnownLocationAsync();
-
-                if (location == null)
-                {
-                    location = await Geolocation.GetLocationAsync(new GeolocationRequest
-                    {
-                        DesiredAccuracy = GeolocationAccuracy.Medium,
-                        Timeout = TimeSpan.FromSeconds(10)
-                    });
-                }
-
-                if (location != null)
-                {
-                    // Konum bilgisini string'e çevir
-                    // Gerçek uygulamada Geocoding kullanarak adres alýnabilir
-                    Location = $"Kampüs ({location.Latitude:F4}, {location.Longitude:F4})";
-                }
-            }
-            catch (Exception ex)
-            {
-                ErrorMessage = $"Konum alýnamadý: {ex.Message}";
-            }
-        }
 
         [RelayCommand]
         private async Task SaveProductAsync()
@@ -231,6 +263,12 @@ namespace KamPay.ViewModels
                 return;
             }
 
+            // Konumun alýnmýþ olmasýný kontrol et
+            if (Latitude == null || Longitude == null)
+            {
+                await Shell.Current.DisplayAlert("Eksik Bilgi", "Lütfen ürün konumu almak için konum butonunu kullanýn.", "Tamam");
+                return;
+            }
             try
             {
                 IsLoading = true;

@@ -7,7 +7,6 @@ using KamPay.Views;
 using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
-
 using CommunityToolkit.Maui.Core; 
 
 namespace KamPay.ViewModels

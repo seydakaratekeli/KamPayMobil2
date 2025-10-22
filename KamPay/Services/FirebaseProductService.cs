@@ -630,12 +630,12 @@ public class FirebaseProductService : IProductService
         {
             result.AddError($"En fazla {Constants.MaxProductImages} görsel eklenebilir");
         }
-
+        /*
         if (request.Type == ProductType.Takas && string.IsNullOrWhiteSpace(request.ExchangePreference))
         {
             result.AddError("Takas için tercih belirtilmelidir");
         }
-
+        */
         return result;
     }
     #endregion

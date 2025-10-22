@@ -143,32 +143,27 @@
                 </Picker>
             </Frame>
 
-            <!-- Konum -->
-            <Label Text="Konum" 
-                   FontSize="16" 
-                   FontAttributes="Bold"
-                   TextColor="#666" />
+            <Label Text="Konum"
+       Style="{StaticResource SectionTitleStyle}" />
 
-            <HorizontalStackLayout Spacing="10">
-                <Frame Padding="0" 
-                       BorderColor="#E0E0E0"
-                       CornerRadius="8"
-                       HorizontalOptions="FillAndExpand">
-                    <Entry Placeholder="Konum (ör: Kampüs, Bina A)"
-                           Text="{Binding Location}"
-                           FontSize="16" />
+            <Grid ColumnDefinitions="*,Auto"
+      ColumnSpacing="10">
+
+                <Frame Grid.Column="0"
+           Style="{StaticResource InputFrameStyle}">
+                    <Label Text="{Binding Location, TargetNullValue='Anlık konumu almak için yandaki butona dokunun'}"
+               VerticalOptions="Center"
+               TextColor="{StaticResource Gray600}"
+               LineBreakMode="TailTruncation"/>
                 </Frame>
 
-                <Button Text="📍"
-                        Command="{Binding UseCurrentLocationCommand}"
-                        WidthRequest="50"
-                        HeightRequest="50"
-                        CornerRadius="25"
-                        BackgroundColor="#4CAF50"
-                        TextColor="White"
-                        FontSize="20" />
-            </HorizontalStackLayout>
-
+                <Button Grid.Column="1"
+            Text="📍"
+            Command="{Binding UseCurrentLocationCommand}"
+            Style="{StaticResource CircleButtonStyle}"
+            IsEnabled="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}"
+            SemanticProperties.Hint="Anlık konumunuzu almak için dokunun"/>
+            </Grid>
             <!-- Görseller -->
             <Label Text="Ürün Görselleri (Maksimum 5)" 
                    FontSize="16" 

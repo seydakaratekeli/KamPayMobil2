@@ -65,9 +65,9 @@ namespace KamPay
             builder.Services.AddSingleton<IUserProfileService, FirebaseUserProfileService>();
             builder.Services.AddSingleton<IQRCodeService>(sp =>
                 new FirebaseQRCodeService(sp.GetRequiredService<IUserProfileService>())
-            ); 
-            
-            
+            );
+
+            builder.Services.AddSingleton<IReverseGeocodeService, ReverseGeocodeService>();
             builder.Services.AddSingleton<ISurpriseBoxService, FirebaseSurpriseBoxService>();
             builder.Services.AddSingleton<IGoodDeedService, FirebaseGoodDeedService>();
 

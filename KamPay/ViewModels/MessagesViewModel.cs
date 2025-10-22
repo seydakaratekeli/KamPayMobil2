@@ -59,16 +59,33 @@ namespace KamPay.ViewModels
                     return;
                 }
 
+                // 🔥 İLK YÜKLEME: Mevcut konuşmaları hızlıca çek
+                var conversationsResult = await _messagingService.GetUserConversationsAsync(_currentUser.UserId);
+                if (conversationsResult.Success && conversationsResult.Data != null)
+                {
+                    Conversations.Clear();
+                    foreach (var convo in conversationsResult.Data)
+                    {
+                        convo.OtherUserName = convo.GetOtherUserName(_currentUser.UserId);
+                        convo.OtherUserPhotoUrl = convo.GetOtherUserPhotoUrl(_currentUser.UserId);
+                        convo.UnreadCount = convo.GetUnreadCount(_currentUser.UserId);
+                        Conversations.Add(convo);
+                    }
+
+                    // Okunmamış sayısını hesapla
+                    UnreadCount = Conversations.Sum(c => c.UnreadCount);
+                    WeakReferenceMessenger.Default.Send(new UnreadMessageStatusMessage(UnreadCount > 0));
+                }
+
+                // 🔥 Real-time listener'ı başlat (yeni güncellemeler için)
                 await StartListeningForConversationsAsync();
                 _isInitialized = true;
+                IsLoading = false;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Konuşmalar yüklenirken hata oluştu: {ex.Message}");
                 EmptyMessage = "Konuşmalar yüklenemedi.";
-            }
-            finally
-            {
                 IsLoading = false;
             }
         }

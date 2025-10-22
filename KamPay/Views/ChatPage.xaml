@@ -10,12 +10,14 @@
         <!-- Asıl içerik -->
         <Grid RowDefinitions="*,Auto">
 
+            <!-- 🔥 Mesaj Listesi -->
             <CollectionView Grid.Row="0"
                             x:Name="MessagesCollectionView"
                             ItemsSource="{Binding Messages}"
                             ItemsLayout="VerticalList"
                             VerticalScrollBarVisibility="Never"
-                            SelectionMode="None">
+                            SelectionMode="None"
+                            IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}">
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="models:Message">
                         <Grid Padding="10,5">

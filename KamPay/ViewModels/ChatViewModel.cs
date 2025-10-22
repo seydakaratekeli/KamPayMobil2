@@ -126,6 +126,9 @@ namespace KamPay.ViewModels
                             Messages.Add(msg);
                         }
                     }
+
+                    // 🔥 İlk mesajlar yüklendikten HEMEN SONRA loading'i kapat
+                    IsLoading = false;
                 }
 
                 // 🔥 Real-time listener'ı başlat (yeni mesajlar için)
@@ -227,31 +230,15 @@ namespace KamPay.ViewModels
             _isListenerActive = true;
         }
 
-        // KamPay/ViewModels/ChatViewModel.cs
-
+        // 🔥 YENİ: Mesajı zaman sırasına göre doğru pozisyona ekle
         private void InsertMessageInOrder(Message newMessage)
         {
-            // 🔥 YENİ MANTIK: Geçici mesajı bul ve gerçek olanla değiştir
-            // İçerik, gönderen ve alıcıya göre en yakın geçici mesajı bulmaya çalışalım.
-            var tempMessage = Messages.FirstOrDefault(m =>
-                m.MessageId.StartsWith("temp_") &&
-                m.Content == newMessage.Content &&
-                m.SenderId == newMessage.SenderId);
-
-            if (tempMessage != null)
+            // Geçici mesaj varsa önce onu kaldır
+            var tempMessage = Messages.FirstOrDefault(m => m.MessageId.StartsWith("temp_"));
+            if (tempMessage != null && tempMessage.Content == newMessage.Content)
             {
-                // Geçici mesajı bulduk. UI'da kaybolma olmaması için
-                // önce pozisyonunu al, sonra sil ve yerine yenisini ekle.
-                var index = Messages.IndexOf(tempMessage);
-                if (index != -1)
-                {
-                    Messages.RemoveAt(index);
-                    Messages.Insert(index, newMessage);
-                    return; // İşlem tamamlandı, fonksiyondan çık.
-                }
+                Messages.Remove(tempMessage);
             }
-
-            // --- Aşağıdaki kod, eğer bir geçici mesaj bulunamazsa (örneğin başka bir cihazdan gelen mesajlar için) çalışır ---
 
             // Liste boşsa veya son mesaj yeniden eskiyse direkt ekle
             if (Messages.Count == 0 || Messages.Last().SentAt <= newMessage.SentAt)
@@ -260,7 +247,7 @@ namespace KamPay.ViewModels
                 return;
             }
 
-            // Doğru pozisyonu bul ve ekle
+            // Doğru pozisyonu bul ve ekle (binary search benzeri)
             for (int i = Messages.Count - 1; i >= 0; i--)
             {
                 if (Messages[i].SentAt <= newMessage.SentAt)
@@ -273,6 +260,7 @@ namespace KamPay.ViewModels
             // En eski mesajsa en başa ekle
             Messages.Insert(0, newMessage);
         }
+
         [RelayCommand]
         private async Task SendMessageAsync()
         {
@@ -322,9 +310,6 @@ namespace KamPay.ViewModels
                     ProductId = Conversation.ProductId
                 };
 
-
-
-
                 if (string.IsNullOrEmpty(request.ReceiverId))
                 {
                     // Hata: Geçici mesajı kaldır
@@ -337,15 +322,27 @@ namespace KamPay.ViewModels
                 // Arka planda Firebase'e gönder
                 var result = await _messagingService.SendMessageAsync(request, _currentUser);
 
-                if (!result.Success)
+                if (result.Success)
                 {
-                    // ❌ Hata: SADECE HATA DURUMUNDA geçici mesajı kaldır ve kullanıcıyı bilgilendir
+                    // ✅ Başarılı: Geçici mesajı gerçek mesajla değiştir
+                    var realMessage = result.Data;
+                    realMessage.IsSentByMe = true;
+                    realMessage.IsDelivered = true;
+
+                    // Geçici mesajı bul ve kaldır
+                    Messages.Remove(tempMessage);
+
+                    // Gerçek mesajı doğru sıraya ekle (listener eklemeden önce)
+                    // NOT: Listener zaten ekleyecek, o yüzden burada eklemeye gerek yok
+                    // InsertMessageInOrder(realMessage); 
+                }
+                else
+                {
+                    // ❌ Hata: Geçici mesajı kaldır ve kullanıcıyı bilgilendir
                     Messages.Remove(tempMessage);
                     await Application.Current.MainPage.DisplayAlert("Hata", result.Message ?? "Mesaj gönderilemedi", "Tamam");
                     MessageText = messageContent;
                 }
-                // ✅ Başarılı durumdaki tüm UI kodlarını siliyoruz.
-                // Bu işi artık tamamen Firebase dinleyicisi yapacak.
             }
             catch (Exception ex)
             {

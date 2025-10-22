@@ -17,39 +17,27 @@
                CornerRadius="15"
                BackgroundColor="#E8F5E9"
                BorderColor="Transparent">
-            <Grid ColumnDefinitions="*,Auto">
-                <HorizontalStackLayout Spacing="10">
-                    <Label Text="💬"
-                           FontSize="24"
-                           VerticalOptions="Center" />
-                    <VerticalStackLayout>
-                        <Label Text="Mesajlarım"
-                               FontSize="18"
-                               FontAttributes="Bold" />
-                        <Label Text="{Binding UnreadCount, StringFormat='{0} okunmamış mesaj'}"
-                               FontSize="12"
-                               TextColor="#4CAF50"
-                               IsVisible="{Binding UnreadCount, Converter={StaticResource IntToBoolConverter}}" />
-                    </VerticalStackLayout>
-                </HorizontalStackLayout>
-
-                <!-- 🔹 Sağ üstte dönen indikatör -->
-                <ActivityIndicator 
-                    Grid.Column="1"
-                    IsRunning="{Binding IsLoading}" 
-                    IsVisible="{Binding IsLoading}" 
-                    Color="#4CAF50"
-                    WidthRequest="25"
-                    HeightRequest="25"
-                    VerticalOptions="Center"
-                    HorizontalOptions="End" />
-            </Grid>
+            <HorizontalStackLayout Spacing="10">
+                <Label Text="💬"
+                       FontSize="24"
+                       VerticalOptions="Center" />
+                <VerticalStackLayout>
+                    <Label Text="Mesajlarım"
+                           FontSize="18"
+                           FontAttributes="Bold" />
+                    <Label Text="{Binding UnreadCount, StringFormat='{0} okunmamış mesaj'}"
+                           FontSize="12"
+                           TextColor="#4CAF50"
+                           IsVisible="{Binding UnreadCount, Converter={StaticResource IntToBoolConverter}}" />
+                </VerticalStackLayout>
+            </HorizontalStackLayout>
         </Frame>
 
         <!-- 🔹 Mesaj Listesi -->
         <CollectionView Grid.Row="1"
                         ItemsSource="{Binding Conversations}"
-                        SelectionMode="None">
+                        SelectionMode="None"
+                        IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}">
 
             <CollectionView.EmptyView>
                 <VerticalStackLayout Padding="40"
@@ -165,27 +153,47 @@
             </CollectionView.ItemTemplate>
         </CollectionView>
 
-        <!-- 🔹 Yükleme Overlay (yarı saydam) -->
-        <Grid BackgroundColor="#40FFFFFF"
-              IsVisible="{Binding IsLoading}"
-              Grid.RowSpan="2"
-              VerticalOptions="FillAndExpand"
-              HorizontalOptions="FillAndExpand"
-              InputTransparent="False">
+        <!-- 🔥 YENİ: Skeleton Loader -->
+        <VerticalStackLayout Grid.Row="1" 
+                             Padding="15"
+                             Spacing="10"
+                             IsVisible="{Binding IsLoading}">
+            <!-- Skeleton Item 1 -->
+            <Frame Padding="15" CornerRadius="15" BackgroundColor="White" BorderColor="#E0E0E0">
+                <Grid ColumnDefinitions="60,*,Auto" ColumnSpacing="15">
+                    <BoxView Grid.Column="0" WidthRequest="60" HeightRequest="60" CornerRadius="30" BackgroundColor="#E0E0E0"/>
+                    <VerticalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                        <BoxView HeightRequest="18" WidthRequest="120" BackgroundColor="#E0E0E0" CornerRadius="4"/>
+                        <BoxView HeightRequest="14" WidthRequest="180" BackgroundColor="#F0F0F0" CornerRadius="3"/>
+                    </VerticalStackLayout>
+                    <BoxView Grid.Column="2" HeightRequest="12" WidthRequest="40" BackgroundColor="#F0F0F0" CornerRadius="3"/>
+                </Grid>
+            </Frame>
 
-            <VerticalStackLayout HorizontalOptions="Center"
-                                 VerticalOptions="Center"
-                                 Spacing="10">
-                <ActivityIndicator IsRunning="{Binding IsLoading}"
-                                   Color="#4CAF50"
-                                   WidthRequest="50"
-                                   HeightRequest="50" />
-                <Label Text="Konuşmalar yükleniyor..."
-                       FontSize="14"
-                       TextColor="#4CAF50"
-                       HorizontalTextAlignment="Center" />
-            </VerticalStackLayout>
-        </Grid>
+            <!-- Skeleton Item 2 -->
+            <Frame Padding="15" CornerRadius="15" BackgroundColor="White" BorderColor="#E0E0E0">
+                <Grid ColumnDefinitions="60,*,Auto" ColumnSpacing="15">
+                    <BoxView Grid.Column="0" WidthRequest="60" HeightRequest="60" CornerRadius="30" BackgroundColor="#E0E0E0"/>
+                    <VerticalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                        <BoxView HeightRequest="18" WidthRequest="150" BackgroundColor="#E0E0E0" CornerRadius="4"/>
+                        <BoxView HeightRequest="14" WidthRequest="200" BackgroundColor="#F0F0F0" CornerRadius="3"/>
+                    </VerticalStackLayout>
+                    <BoxView Grid.Column="2" HeightRequest="12" WidthRequest="40" BackgroundColor="#F0F0F0" CornerRadius="3"/>
+                </Grid>
+            </Frame>
+
+            <!-- Skeleton Item 3 -->
+            <Frame Padding="15" CornerRadius="15" BackgroundColor="White" BorderColor="#E0E0E0">
+                <Grid ColumnDefinitions="60,*,Auto" ColumnSpacing="15">
+                    <BoxView Grid.Column="0" WidthRequest="60" HeightRequest="60" CornerRadius="30" BackgroundColor="#E0E0E0"/>
+                    <VerticalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                        <BoxView HeightRequest="18" WidthRequest="100" BackgroundColor="#E0E0E0" CornerRadius="4"/>
+                        <BoxView HeightRequest="14" WidthRequest="160" BackgroundColor="#F0F0F0" CornerRadius="3"/>
+                    </VerticalStackLayout>
+                    <BoxView Grid.Column="2" HeightRequest="12" WidthRequest="40" BackgroundColor="#F0F0F0" CornerRadius="3"/>
+                </Grid>
+            </Frame>
+        </VerticalStackLayout>
 
     </Grid>
 </ContentPage>
