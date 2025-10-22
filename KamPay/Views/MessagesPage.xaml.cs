@@ -1,34 +1,32 @@
-// KamPay/Views/MessagesPage.xaml.cs
+﻿using KamPay.ViewModels;
 
-using KamPay.ViewModels;
-
-namespace KamPay.Views;
-
-public partial class MessagesPage : ContentPage
+namespace KamPay.Views
 {
-    public MessagesPage(MessagesViewModel vm)
+    public partial class MessagesPage : ContentPage
     {
-        InitializeComponent();
-        BindingContext = vm;
-    }
+        private readonly MessagesViewModel _viewModel;
 
-    // YEN�: OnAppearing metodu eklendi
-    protected override void OnAppearing()
-    {
-        base.OnAppearing();
-        if (BindingContext is MessagesViewModel vm && vm.InitializeCommand.CanExecute(null))
+        public MessagesPage(MessagesViewModel viewModel)
         {
-            vm.InitializeCommand.Execute(null);
+            InitializeComponent();
+            _viewModel = viewModel;
+            BindingContext = _viewModel;
         }
-    }
 
-    // Mevcut OnDisappearing metodu AYNEN KALIYOR
-    protected override void OnDisappearing()
-    {
-        base.OnDisappearing();
-        if (BindingContext is IDisposable disposable)
+        // 🔥 Sayfa her göründüğünde çağrılır
+        protected override async void OnAppearing()
         {
-            disposable.Dispose();
+            base.OnAppearing();
+
+            // ViewModel'in initialize metodunu çağır
+            await _viewModel.InitializeAsync();
+        }
+
+        // 🔥 Sayfa kaybolduğunda listener'ları temizle
+        protected override void OnDisappearing()
+        {
+            base.OnDisappearing();
+            // Dispose otomatik çağrılır, ekstra birşey yapma
         }
     }
 }

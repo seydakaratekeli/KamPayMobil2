@@ -7,12 +7,11 @@ using Firebase.Database.Query;
 using KamPay.Helpers;
 using KamPay.Models;
 using KamPay.Views;
-using CommunityToolkit.Mvvm.Messaging; 
-using KamPay.ViewModels; 
+using CommunityToolkit.Mvvm.Messaging;
+using KamPay.ViewModels;
 
 namespace KamPay.Services
 {
-
     public class FirebaseMessagingService : IMessagingService
     {
         private readonly FirebaseClient _firebaseClient;
@@ -35,20 +34,18 @@ namespace KamPay.Services
         {
             try
             {
-                // Adım 1: Gerekli bilgilerin kontrolü
                 if (request == null || sender == null || string.IsNullOrEmpty(request.ReceiverId) || string.IsNullOrEmpty(request.Content))
                 {
                     return ServiceResult<Message>.FailureResult("Geçersiz istek: Gönderen, alıcı veya mesaj içeriği boş olamaz.");
                 }
 
-                // Adım 2: Konuşmayı al veya oluştur
                 var conversationResult = await GetOrCreateConversationAsync(sender.UserId, request.ReceiverId, request.ProductId);
                 if (!conversationResult.Success || conversationResult.Data == null)
                 {
                     return ServiceResult<Message>.FailureResult("Konuşma oluşturulamadı veya bulunamadı.");
                 }
                 var conversation = conversationResult.Data;
-                // Alıcı bilgilerini çekme 
+
                 var receiver = await _firebaseClient
                     .Child(Constants.UsersCollection)
                     .Child(request.ReceiverId)
@@ -59,7 +56,6 @@ namespace KamPay.Services
                     return ServiceResult<Message>.FailureResult("Alıcı kullanıcı bulunamadı.");
                 }
 
-                // Adım 3: Mesaj nesnesini oluştur
                 var message = new Message
                 {
                     ConversationId = conversation.ConversationId,
@@ -69,16 +65,10 @@ namespace KamPay.Services
                     Content = request.Content,
                     Type = request.Type,
                     ProductId = request.ProductId,
-
-                    // Alıcı bilgilerini atama 
                     ReceiverName = receiver.FullName,
                     ReceiverPhotoUrl = receiver.ProfileImageUrl,
-
-                 
-
                 };
 
-                // Adım 4: Eğer mesaj bir ürünle ilgiliyse, ürün bilgilerini mesaja ekle
                 if (!string.IsNullOrEmpty(request.ProductId))
                 {
                     var product = await _firebaseClient
@@ -93,20 +83,17 @@ namespace KamPay.Services
                     }
                 }
 
-                // Adım 5: Mesajı veritabanına kaydet
                 await _firebaseClient
                     .Child(Constants.MessagesCollection)
                     .Child(conversation.ConversationId)
                     .Child(message.MessageId)
                     .PutAsync(message);
 
-                // Adım 6: Konuşma nesnesini son mesaj bilgileriyle güncelle
                 conversation.LastMessage = message.Type == MessageType.Text ? message.Content : "📷 Medya";
                 conversation.LastMessageTime = DateTime.UtcNow;
                 conversation.LastMessageSenderId = sender.UserId;
                 conversation.UpdatedAt = DateTime.UtcNow;
 
-                // Okunmamış mesaj sayısını artır
                 if (conversation.User1Id == request.ReceiverId)
                     conversation.UnreadCountUser1++;
                 else
@@ -117,31 +104,15 @@ namespace KamPay.Services
                     .Child(conversation.ConversationId)
                     .PutAsync(conversation);
 
-                // YENİ: Genel bildirim yerine mesaj rozeti için mesaj yayınla
-               // WeakReferenceMessenger.Default.Send(new UnreadMessageStatusMessage(true));
-
-               /* // Adım 7: Alıcıya bildirim gönder
-                var notification = new Notification
-                {
-                    UserId = request.ReceiverId,
-                    Type = NotificationType.NewMessage,
-                    Title = $"Yeni Mesaj: {sender.FullName}",
-                    Message = message.Content,
-                    RelatedEntityId = conversation.ConversationId,
-                    RelatedEntityType = "Conversation",
-                    ActionUrl = $"{nameof(ChatPage)}?conversationId={conversation.ConversationId}"
-                };*/
-               // await _notificationService.CreateNotificationAsync(notification);
-
                 return ServiceResult<Message>.SuccessResult(message, "Mesaj başarıyla gönderildi.");
             }
             catch (Exception ex)
             {
-                // Hatanın detayını loglamak veya görmek için
                 Console.WriteLine($"SendMessageAsync Hata: {ex.Message}");
                 return ServiceResult<Message>.FailureResult("Mesaj gönderilemedi. Bir hata oluştu.", ex.Message);
             }
         }
+
         public async Task<ServiceResult<List<Message>>> GetConversationMessagesAsync(string conversationId, int limit = 50)
         {
             try
@@ -193,7 +164,6 @@ namespace KamPay.Services
         {
             try
             {
-                // Mevcut konuşmayı ara
                 var allConversations = await _firebaseClient
                     .Child(Constants.ConversationsCollection)
                     .OnceAsync<Conversation>();
@@ -210,7 +180,6 @@ namespace KamPay.Services
                     return ServiceResult<Conversation>.SuccessResult(existing);
                 }
 
-                // Yeni konuşma oluştur
                 var user1 = await _firebaseClient
                     .Child(Constants.UsersCollection)
                     .Child(user1Id)
@@ -238,7 +207,6 @@ namespace KamPay.Services
                     LastMessageTime = DateTime.UtcNow
                 };
 
-                // Ürün bilgisi varsa ekle
                 if (!string.IsNullOrEmpty(productId))
                 {
                     var product = await _firebaseClient
@@ -276,12 +244,10 @@ namespace KamPay.Services
                     .Child(conversationId)
                     .OnceSingleAsync<Conversation>();
 
-                //  Diğer konuşmalarda hala okunmamış mesaj var mı diye kontrol et
                 await CheckAndBroadcastUnreadMessageStatus(readerUserId);
 
                 if (conversation == null) return ServiceResult<bool>.FailureResult("Konuşma bulunamadı.");
 
-                // Hangi kullanıcının okunmamış sayacının sıfırlanacağını belirle
                 if (conversation.User1Id == readerUserId)
                 {
                     conversation.UnreadCountUser1 = 0;
@@ -331,7 +297,6 @@ namespace KamPay.Services
             }
         }
 
-
         public async Task<ServiceResult<bool>> DeleteConversationAsync(string conversationId, string userId)
         {
             try
@@ -346,7 +311,6 @@ namespace KamPay.Services
                     return ServiceResult<bool>.FailureResult("Konuşma bulunamadı");
                 }
 
-                // Sadece pasif yap, tamamen silme
                 conversation.IsActive = false;
 
                 await _firebaseClient
@@ -360,6 +324,68 @@ namespace KamPay.Services
             {
                 return ServiceResult<bool>.FailureResult("Silme başarısız", ex.Message);
             }
+        }
+
+        // 🔥 YENİ: Konuşmaları real-time dinle
+        public IDisposable SubscribeToConversations(string userId, Action<List<Conversation>> onConversationsChanged)
+        {
+            var observable = _firebaseClient
+                .Child(Constants.ConversationsCollection)
+                .AsObservable<Conversation>();
+
+            return observable.Subscribe(changeEvent =>
+            {
+                try
+                {
+                    // Tüm aktif konuşmaları tekrar çek
+                    Task.Run(async () =>
+                    {
+                        var result = await GetUserConversationsAsync(userId);
+                        if (result.Success)
+                        {
+                            MainThread.BeginInvokeOnMainThread(() =>
+                            {
+                                onConversationsChanged?.Invoke(result.Data);
+                            });
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"SubscribeToConversations Hata: {ex.Message}");
+                }
+            });
+        }
+
+        // 🔥 YENİ: Mesajları real-time dinle
+        public IDisposable SubscribeToMessages(string conversationId, Action<List<Message>> onMessagesChanged)
+        {
+            var observable = _firebaseClient
+                .Child(Constants.MessagesCollection)
+                .Child(conversationId)
+                .AsObservable<Message>();
+
+            return observable.Subscribe(changeEvent =>
+            {
+                try
+                {
+                    Task.Run(async () =>
+                    {
+                        var result = await GetConversationMessagesAsync(conversationId);
+                        if (result.Success)
+                        {
+                            MainThread.BeginInvokeOnMainThread(() =>
+                            {
+                                onMessagesChanged?.Invoke(result.Data);
+                            });
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"SubscribeToMessages Hata: {ex.Message}");
+                }
+            });
         }
     }
 }

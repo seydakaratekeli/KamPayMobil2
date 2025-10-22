@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,7 +12,6 @@ using Firebase.Database;
 using Firebase.Database.Query;
 using KamPay.Helpers;
 using System.Reactive.Linq;
-using KamPay.Views;
 
 namespace KamPay.ViewModels
 {
@@ -28,12 +27,11 @@ namespace KamPay.ViewModels
         [ObservableProperty]
         private bool isLoading = true;
 
-
         [ObservableProperty]
         private int unreadCount;
 
         [ObservableProperty]
-        private string emptyMessage = "Henüz mesajınız yok";
+        private string emptyMessage = "HenÃ¼z mesajÄ±nÄ±z yok";
 
         public ObservableCollection<Conversation> Conversations { get; } = new();
 
@@ -41,25 +39,33 @@ namespace KamPay.ViewModels
         {
             _messagingService = messagingService;
             _authService = authService;
-            // Constructor'daki bu çağrıyı SİLİYORUZ:
-            // StartListeningForConversations();
         }
-        // YENİ: Başlatma komutu
-        [RelayCommand]
-        private async Task InitializeAsync()
+
+        // ğŸ”¥ Sayfa gÃ¶rÃ¼ndÃ¼ÄŸÃ¼nde otomatik Ã§aÄŸrÄ±lacak
+        public async Task InitializeAsync()
         {
             if (_isInitialized) return;
 
             IsLoading = true;
             try
             {
+                // ğŸ”´ BURADA EKSÄ°KTÄ°: _currentUser set edilmiyordu!
+                _currentUser = await _authService.GetCurrentUserAsync();
+
+                if (_currentUser == null)
+                {
+                    EmptyMessage = "MesajlarÄ± gÃ¶rmek iÃ§in giriÅŸ yapmalÄ±sÄ±nÄ±z.";
+                    IsLoading = false;
+                    return;
+                }
+
                 await StartListeningForConversationsAsync();
                 _isInitialized = true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Konuşmalar yüklenirken hata oluştu: {ex.Message}");
-                EmptyMessage = "Konuşmalar yüklenemedi.";
+                Console.WriteLine($"KonuÅŸmalar yÃ¼klenirken hata oluÅŸtu: {ex.Message}");
+                EmptyMessage = "KonuÅŸmalar yÃ¼klenemedi.";
             }
             finally
             {
@@ -67,62 +73,86 @@ namespace KamPay.ViewModels
             }
         }
 
-        // GÜNCELLENDİ: Metodun imzası async Task olarak değiştirildi
         private async Task StartListeningForConversationsAsync()
         {
-            var currentUser = await _authService.GetCurrentUserAsync();
-            if (currentUser == null)
+            if (_currentUser == null)
             {
-                EmptyMessage = "Mesajları görmek için giriş yapmalısınız.";
+                Console.WriteLine("âš ï¸ _currentUser null, listener baÅŸlatÄ±lamadÄ±!");
                 return;
             }
 
             Conversations.Clear();
 
+            // ğŸ”¥ Real-time Firebase listener
             _conversationsSubscription = _firebaseClient
                 .Child(Constants.ConversationsCollection)
-                .OrderBy("LastMessageTime")
                 .AsObservable<Conversation>()
-                .Where(e => e.Object != null && e.Object.IsActive && (e.Object.User1Id == _currentUser.UserId || e.Object.User2Id == _currentUser.UserId))
+                .Where(e => e.Object != null &&
+                           e.Object.IsActive &&
+                           (e.Object.User1Id == _currentUser.UserId || e.Object.User2Id == _currentUser.UserId))
                 .Subscribe(e =>
                 {
                     MainThread.BeginInvokeOnMainThread(() =>
                     {
-                        var conversation = e.Object;
-                        conversation.ConversationId = e.Key;
-                        conversation.OtherUserName = conversation.GetOtherUserName(_currentUser.UserId);
-                        conversation.OtherUserPhotoUrl = conversation.GetOtherUserPhotoUrl(_currentUser.UserId);
-                        conversation.UnreadCount = conversation.GetUnreadCount(_currentUser.UserId);
-
-                        var existingConvo = Conversations.FirstOrDefault(c => c.ConversationId == conversation.ConversationId);
-
-                        if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
+                        try
                         {
-                            if (existingConvo != null)
+                            var conversation = e.Object;
+                            conversation.ConversationId = e.Key;
+                            conversation.OtherUserName = conversation.GetOtherUserName(_currentUser.UserId);
+                            conversation.OtherUserPhotoUrl = conversation.GetOtherUserPhotoUrl(_currentUser.UserId);
+                            conversation.UnreadCount = conversation.GetUnreadCount(_currentUser.UserId);
+
+                            var existingConvo = Conversations.FirstOrDefault(c => c.ConversationId == conversation.ConversationId);
+
+                            if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
                             {
-                                // Var olanı güncelle
-                                var index = Conversations.IndexOf(existingConvo);
-                                Conversations[index] = conversation;
+                                if (existingConvo != null)
+                                {
+                                    // Var olanÄ± gÃ¼ncelle
+                                    var index = Conversations.IndexOf(existingConvo);
+                                    Conversations[index] = conversation;
+                                }
+                                else
+                                {
+                                    // Yeni sohbeti en Ã¼ste ekle
+                                    Conversations.Insert(0, conversation);
+                                }
                             }
-                            else
+                            else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
                             {
-                                // Yeni sohbeti en üste ekle
-                                Conversations.Insert(0, conversation);
+                                if (existingConvo != null)
+                                {
+                                    Conversations.Remove(existingConvo);
+                                }
                             }
+
+                            // Listeyi LastMessageTime'a gÃ¶re sÄ±rala
+                            var sortedList = Conversations.OrderByDescending(c => c.LastMessageTime).ToList();
+                            Conversations.Clear();
+                            foreach (var item in sortedList)
+                            {
+                                Conversations.Add(item);
+                            }
+
+                            // Toplam okunmamÄ±ÅŸ sayÄ±sÄ±nÄ± yeniden hesapla
+                            UnreadCount = Conversations.Sum(c => c.UnreadCount);
+                            WeakReferenceMessenger.Default.Send(new UnreadMessageStatusMessage(UnreadCount > 0));
+
+                            EmptyMessage = Conversations.Any() ? string.Empty : "HenÃ¼z mesajÄ±nÄ±z yok.";
+                            IsLoading = false;
                         }
-                        else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
+                        catch (Exception ex)
                         {
-                            if (existingConvo != null)
-                            {
-                                Conversations.Remove(existingConvo);
-                            }
+                            Console.WriteLine($"âŒ Conversation update hatasÄ±: {ex.Message}");
                         }
-
-                        // Toplam okunmamış sayısını yeniden hesapla
-                        UnreadCount = Conversations.Sum(c => c.UnreadCount);
-                        WeakReferenceMessenger.Default.Send(new UnreadMessageStatusMessage(UnreadCount > 0));
-
-                        EmptyMessage = Conversations.Any() ? string.Empty : "Henüz mesajınız yok.";
+                    });
+                },
+                error =>
+                {
+                    Console.WriteLine($"âŒ Firebase listener hatasÄ±: {error.Message}");
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        EmptyMessage = "KonuÅŸmalar yÃ¼klenirken hata oluÅŸtu.";
                         IsLoading = false;
                     });
                 });
@@ -142,9 +172,9 @@ namespace KamPay.ViewModels
 
             var confirm = await Application.Current.MainPage.DisplayAlert(
                 "Onay",
-                "Bu konuşmayı silmek istediğinize emin misiniz?",
+                "Bu konuÅŸmayÄ± silmek istediÄŸinize emin misiniz?",
                 "Evet",
-                "Hayır"
+                "HayÄ±r"
             );
 
             if (!confirm) return;
@@ -156,7 +186,12 @@ namespace KamPay.ViewModels
 
                 if (result.Success)
                 {
-                    Conversations.Remove(conversation);
+                    // Real-time listener otomatik gÃ¼ncelleyecek, manuel silmeye gerek yok
+                    // Conversations.Remove(conversation); 
+                }
+                else
+                {
+                    await Application.Current.MainPage.DisplayAlert("Hata", result.Message, "Tamam");
                 }
             }
             catch (Exception ex)
@@ -164,16 +199,17 @@ namespace KamPay.ViewModels
                 await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
             }
         }
+
         [RelayCommand]
         async Task GoToChatAsync(Conversation conversation)
         {
             if (conversation == null) return;
             await Shell.Current.GoToAsync($"{nameof(ChatPage)}?conversationId={conversation.ConversationId}");
         }
+
         public void Dispose()
         {
             _conversationsSubscription?.Dispose();
         }
     }
-
-    }
+}

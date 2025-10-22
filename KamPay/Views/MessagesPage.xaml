@@ -17,20 +17,33 @@
                CornerRadius="15"
                BackgroundColor="#E8F5E9"
                BorderColor="Transparent">
-            <HorizontalStackLayout Spacing="10">
-                <Label Text="💬"
-                       FontSize="24"
-                       VerticalOptions="Center" />
-                <VerticalStackLayout>
-                    <Label Text="Mesajlarım"
-                           FontSize="18"
-                           FontAttributes="Bold" />
-                    <Label Text="{Binding UnreadCount, StringFormat='{0} okunmamış mesaj'}"
-                           FontSize="12"
-                           TextColor="#4CAF50"
-                           IsVisible="{Binding UnreadCount, Converter={StaticResource IntToBoolConverter}}" />
-                </VerticalStackLayout>
-            </HorizontalStackLayout>
+            <Grid ColumnDefinitions="*,Auto">
+                <HorizontalStackLayout Spacing="10">
+                    <Label Text="💬"
+                           FontSize="24"
+                           VerticalOptions="Center" />
+                    <VerticalStackLayout>
+                        <Label Text="Mesajlarım"
+                               FontSize="18"
+                               FontAttributes="Bold" />
+                        <Label Text="{Binding UnreadCount, StringFormat='{0} okunmamış mesaj'}"
+                               FontSize="12"
+                               TextColor="#4CAF50"
+                               IsVisible="{Binding UnreadCount, Converter={StaticResource IntToBoolConverter}}" />
+                    </VerticalStackLayout>
+                </HorizontalStackLayout>
+
+                <!-- 🔹 Sağ üstte dönen indikatör -->
+                <ActivityIndicator 
+                    Grid.Column="1"
+                    IsRunning="{Binding IsLoading}" 
+                    IsVisible="{Binding IsLoading}" 
+                    Color="#4CAF50"
+                    WidthRequest="25"
+                    HeightRequest="25"
+                    VerticalOptions="Center"
+                    HorizontalOptions="End" />
+            </Grid>
         </Frame>
 
         <!-- 🔹 Mesaj Listesi -->
@@ -152,32 +165,26 @@
             </CollectionView.ItemTemplate>
         </CollectionView>
 
-        <!-- 🔹 Yükleme Overlay -->
-        <Grid x:Name="LoadingOverlay"
-              BackgroundColor="#80000000"
+        <!-- 🔹 Yükleme Overlay (yarı saydam) -->
+        <Grid BackgroundColor="#40FFFFFF"
               IsVisible="{Binding IsLoading}"
-              InputTransparent="False"
               Grid.RowSpan="2"
               VerticalOptions="FillAndExpand"
-              HorizontalOptions="FillAndExpand">
+              HorizontalOptions="FillAndExpand"
+              InputTransparent="False">
 
-            <Frame CornerRadius="20"
-                   Padding="25"
-                   BackgroundColor="White"
-                   HorizontalOptions="Center"
-                   VerticalOptions="Center"
-                   HasShadow="True">
-                <VerticalStackLayout Spacing="10" HorizontalOptions="Center">
-                    <ActivityIndicator IsRunning="{Binding IsLoading}"
-                                       Color="#4CAF50"
-                                       WidthRequest="40"
-                                       HeightRequest="40" />
-                    <Label Text="Yükleniyor..."
-                           FontSize="14"
-                           TextColor="#4CAF50"
-                           HorizontalTextAlignment="Center" />
-                </VerticalStackLayout>
-            </Frame>
+            <VerticalStackLayout HorizontalOptions="Center"
+                                 VerticalOptions="Center"
+                                 Spacing="10">
+                <ActivityIndicator IsRunning="{Binding IsLoading}"
+                                   Color="#4CAF50"
+                                   WidthRequest="50"
+                                   HeightRequest="50" />
+                <Label Text="Konuşmalar yükleniyor..."
+                       FontSize="14"
+                       TextColor="#4CAF50"
+                       HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
         </Grid>
 
     </Grid>

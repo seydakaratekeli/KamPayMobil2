@@ -1,69 +1,68 @@
-using CommunityToolkit.Mvvm.Messaging; 
-using KamPay.ViewModels;
+ï»¿using KamPay.ViewModels;
 using KamPay.Models;
+using CommunityToolkit.Mvvm.Messaging;
 
-namespace KamPay.Views;
-
-public class ScrollToChatMessage
+namespace KamPay.Views
 {
-    public Message Message { get; }
-    public ScrollToChatMessage(Message message) => Message = message;
-}
-
-public partial class ChatPage : ContentPage
-{
-   
-
-    public ChatPage(ChatViewModel vm)
+    public partial class ChatPage : ContentPage
     {
-        InitializeComponent();
-        BindingContext = vm;
-    }
+        private readonly ChatViewModel _viewModel;
 
-    protected override async void OnAppearing()
-    {
-        base.OnAppearing();
-
-        WeakReferenceMessenger.Default.Register<ScrollToChatMessage>(this, (r, m) =>
+        public ChatPage(ChatViewModel viewModel)
         {
-            ScrollToLastItem(m.Message);
-        });
+            InitializeComponent();
+            _viewModel = viewModel;
+            BindingContext = _viewModel;
 
-        // Sayfa ilk açýldýðýnda da en alta kaydýr (örneðin son mesajý)
-        await Task.Delay(200);
-        if (BindingContext is ChatViewModel vm && vm.Messages.Any())
+            // ðŸ”¥ Yeni mesaj geldiÄŸinde scroll mesajÄ±nÄ± dinle
+            WeakReferenceMessenger.Default.Register<ScrollToChatMessage>(this, (r, message) =>
+            {
+                ScrollToLastMessage();
+            });
+        }
+
+        protected override void OnAppearing()
         {
-            var last = vm.Messages.Last();
-            ScrollToLastItem(last);
+            base.OnAppearing();
+            // Sayfa gÃ¶rÃ¼ndÃ¼ÄŸÃ¼nde son mesaja kaydÄ±r (biraz gecikmeyle)
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(500);
+                ScrollToLastMessage();
+            });
+        }
+
+        protected override void OnDisappearing()
+        {
+            base.OnDisappearing();
+            // Messenger'Ä± temizle
+            WeakReferenceMessenger.Default.Unregister<ScrollToChatMessage>(this);
+
+            // ViewModel'i dispose et
+            (_viewModel as IDisposable)?.Dispose();
+        }
+
+        // ðŸ”¥ Son mesaja otomatik kaydÄ±rma
+        private void ScrollToLastMessage()
+        {
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                try
+                {
+                    // Biraz bekle, mesajlarÄ±n yÃ¼klenmesi iÃ§in
+                    await Task.Delay(100);
+
+                    if (_viewModel.Messages.Count > 0)
+                    {
+                        var lastMessage = _viewModel.Messages.Last();
+                        MessagesCollectionView.ScrollTo(lastMessage, position: ScrollToPosition.End, animate: true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Scroll hatasÄ±: {ex.Message}");
+                }
+            });
         }
     }
-
-    // Sayfa kaybolduðunda mesaj dinleyicisini durdur
-    protected override void OnDisappearing()
-    {
-        base.OnDisappearing();
-        // Bellek sýzýntýsý olmamasý için kaydý temizle
-        WeakReferenceMessenger.Default.Unregister<ScrollToChatMessage>(this);
-    }
-
-    private async void ScrollToLastItem(Message message)
-    {
-        await MainThread.InvokeOnMainThreadAsync(async () =>
-        {
-            try
-            {
-                if (MessagesCollectionView != null && message != null)
-                {
-                    // Küçük bir gecikme ekle (UI render için zaman tanýr)
-                    await Task.Delay(100);
-                    MessagesCollectionView.ScrollTo(message, position: ScrollToPosition.End, animate: true);
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Scroll hatasý: {ex.Message}");
-            }
-        });
-    }
-
 }

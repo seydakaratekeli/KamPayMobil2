@@ -22,6 +22,8 @@ namespace KamPay.Models
         public bool IsRead { get; set; } = false;
         public DateTime? ReadAt { get; set; }
         public bool IsDeleted { get; set; } = false;
+        // Mesaj durumu özellikleri
+        public bool IsDelivered { get; set; } = true;
 
         // Ürün referansý (opsiyonel)
         public string ProductId { get; set; }

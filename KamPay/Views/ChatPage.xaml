@@ -57,24 +57,44 @@
                                         </Label.Style>
                                     </Label>
 
-                                    <Label Text="{Binding TimeText}"
-                                           FontSize="10"
-                                           HorizontalOptions="End">
-                                        <Label.Style>
-                                            <Style TargetType="Label">
-                                                <Setter Property="TextColor"
-                                                        Value="{StaticResource Gray}" />
-                                                <Style.Triggers>
-                                                    <DataTrigger TargetType="Label"
-                                                                 Binding="{Binding IsSentByMe}"
-                                                                 Value="True">
-                                                        <Setter Property="TextColor"
-                                                                Value="#B2DFDB" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Label.Style>
-                                    </Label>
+                                    <!-- Zaman ve Durum Göstergesi -->
+                                    <HorizontalStackLayout Spacing="5" HorizontalOptions="End">
+                                        <Label Text="{Binding TimeText}"
+                                               FontSize="10">
+                                            <Label.Style>
+                                                <Style TargetType="Label">
+                                                    <Setter Property="TextColor"
+                                                            Value="{StaticResource Gray}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger TargetType="Label"
+                                                                     Binding="{Binding IsSentByMe}"
+                                                                     Value="True">
+                                                            <Setter Property="TextColor"
+                                                                    Value="#B2DFDB" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Label.Style>
+                                        </Label>
+
+                                        <!-- 🔥 YENİ: Gönderim durumu (sadece kendi mesajlarında) -->
+                                        <Label FontSize="12"
+                                               IsVisible="{Binding IsSentByMe}"
+                                               TextColor="#B2DFDB">
+                                            <Label.Triggers>
+                                                <DataTrigger TargetType="Label" 
+                                                            Binding="{Binding IsDelivered}" 
+                                                            Value="False">
+                                                    <Setter Property="Text" Value="⏱" />
+                                                </DataTrigger>
+                                                <DataTrigger TargetType="Label" 
+                                                            Binding="{Binding IsDelivered}" 
+                                                            Value="True">
+                                                    <Setter Property="Text" Value="✓✓" />
+                                                </DataTrigger>
+                                            </Label.Triggers>
+                                        </Label>
+                                    </HorizontalStackLayout>
                                 </VerticalStackLayout>
                             </Frame>
                         </Grid>
@@ -96,6 +116,7 @@
                     <Button Grid.Column="1"
                             Text="Gönder"
                             Command="{Binding SendMessageCommand}"
+                            IsEnabled="{Binding IsSending, Converter={StaticResource InvertedBoolConverter}}"
                             WidthRequest="80" />
                 </Grid>
             </Frame>

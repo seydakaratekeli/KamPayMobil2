@@ -12,6 +12,8 @@ namespace KamPay.Services
        Task<ServiceResult<bool>> DeleteConversationAsync(string conversationId, string userId);
         Task<ServiceResult<bool>> MarkMessagesAsReadAsync(string conversationId, string readerUserId);
         Task<ServiceResult<int>> GetTotalUnreadMessageCountAsync(string userId);
+        IDisposable SubscribeToConversations(string userId, Action<List<Conversation>> onConversationsChanged);
+        IDisposable SubscribeToMessages(string conversationId, Action<List<Message>> onMessagesChanged);
 
 
     }
