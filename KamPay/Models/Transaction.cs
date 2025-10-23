@@ -1,5 +1,5 @@
-using System;
 using KamPay.Models;
+using System;
 using System.Text.Json.Serialization; // Bu using ifadesini ekleyin
 
 namespace KamPay.Models
@@ -21,10 +21,13 @@ namespace KamPay.Models
         public string BuyerId { get; set; }  // Teklifi yapan/isteði gönderen kiþi
         public string BuyerName { get; set; }
 
+        public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending; // Varsayýlan deðer
+
         // Durum ve Zaman Bilgileri
         public TransactionStatus Status { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
         // YENÝ: Bu liste, QR kodlarýnýn durumunu takip etmek için kullanýlacak.
         [JsonIgnore] // Firebase'e bu alaný kaydetmemesi için ignore ediyoruz.
         public List<DeliveryQRCode> DeliveryQRCodes { get; set; } = new();
@@ -52,7 +55,22 @@ namespace KamPay.Models
             }
         }
 
-        public bool CanManageDelivery => Status == TransactionStatus.Accepted && !(DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed));
+        // MEVCUT HATALI SATIRI BUNUNLA DEÐÝÞTÝRÝN:
+        public bool CanManageDelivery
+        {
+            get
+            {
+                // Düzeltilmiþ Mantýk:
+                // Buton sadece;
+                // 1. Ýþlem tipi "Takas" (ProductType.Takas) ise VE
+                // 2. Durumu "Kabul Edilmiþ" (TransactionStatus.Accepted) ise VE
+                // 3. Teslimat tamamlanmamýþsa (sizin mevcut QR kod mantýðýnýzý kullanarak)
+                // görünmelidir.
+                return Type == ProductType.Takas &&
+                       Status == TransactionStatus.Accepted &&
+                       !(DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed));
+            }
+        }
         public bool IsDeliveryCompleted => Status == TransactionStatus.Completed || (Status == TransactionStatus.Accepted && DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed));
         // Takas'a özel alanlar
         public string? OfferedProductId { get; set; } // Takas için teklif edilen ürünün ID'si
@@ -67,5 +85,12 @@ namespace KamPay.Models
         Rejected,     // Teklif reddedildi
         Completed,    // Teslimat tamamlandý ve iþlem kapandý
         Cancelled     // Taraflardan biri iptal etti
+    }
+
+    public enum PaymentStatus
+    {
+        Pending, // Ödeme Bekleniyor
+        Paid,    // Ödendi (Simülasyon)
+        Failed   // Baþarýsýz
     }
 }

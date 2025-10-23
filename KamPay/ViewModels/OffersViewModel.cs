@@ -21,8 +21,7 @@ namespace KamPay.ViewModels
         private readonly IAuthenticationService _authService;
         private IDisposable _incomingOffersSubscription;
         private IDisposable _outgoingOffersSubscription;
-        private readonly FirebaseClient _firebaseClient = new(Constants.FirebaseRealtimeDbUrl);
-
+        private readonly FirebaseClient _firebaseClient; // Bunu ekleyin
         public ObservableCollection<Transaction> IncomingOffers { get; } = new();
         public ObservableCollection<Transaction> OutgoingOffers { get; } = new();
 
@@ -42,7 +41,132 @@ namespace KamPay.ViewModels
         {
             _transactionService = transactionService;
             _authService = authService;
+            _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl); // YENİ: Eklendi
+
+            IncomingOffers = new ObservableCollection<Transaction>();
+            OutgoingOffers = new ObservableCollection<Transaction>();
+            IsIncomingSelected = true;
+
             StartListeningForOffers();
+
+        }
+
+        // OffersViewModel.cs içine yeni komut
+        [RelayCommand]
+        private async Task ConfirmDonationReceivedAsync(Transaction transaction)
+        {
+            if (transaction == null) return;
+
+            // Hızlı kontrol
+            if (transaction.Type != ProductType.Bagis || transaction.Status != TransactionStatus.Accepted)
+            {
+                return;
+            }
+
+            var confirm = await Application.Current.MainPage.DisplayAlert("Onay",
+                $"'{transaction.ProductTitle}' ürününü teslim aldığınızı onaylıyor musunuz?",
+                "Evet, Teslim Aldım", "Hayır");
+
+            if (!confirm) return;
+
+            IsLoading = true;
+            try
+            {
+                var service = App.Current.Handler.MauiContext.Services.GetService<ITransactionService>();
+                var currentUser = await _authService.GetCurrentUserAsync();
+
+                if (service is FirebaseTransactionService firebaseService && currentUser != null)
+                {
+                    // Yeni servis metodunu çağırıyoruz
+                    var result = await firebaseService.ConfirmDonationAsync(transaction.TransactionId, currentUser.UserId);
+
+                    if (result.Success)
+                    {
+                        await Application.Current.MainPage.DisplayAlert("Başarılı", "Bağış işlemi başarıyla tamamlandı.", "Tamam");
+                    }
+                    else
+                    {
+                        await Application.Current.MainPage.DisplayAlert("Hata", result.Message ?? "İşlem tamamlanamadı.", "Tamam");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                await Application.Current.MainPage.DisplayAlert("Hata", $"Bir hata oluştu: {ex.Message}", "Tamam");
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+        [RelayCommand]
+        private async Task CompletePaymentAsync(Transaction transaction)
+        {
+            if (transaction == null) return;
+
+            // Converter zaten kontrol ediyor ama burada da bir güvenlik kontrolü yapalım
+            if (transaction.Type != ProductType.Satis ||
+                transaction.Status != TransactionStatus.Accepted ||
+                transaction.PaymentStatus != PaymentStatus.Pending)
+            {
+                await Application.Current.MainPage.DisplayAlert("Bilgi", "Bu işlem için ödeme yapılamaz.", "Tamam");
+                return;
+            }
+
+            var confirm = await Application.Current.MainPage.DisplayAlert("Ödeme Simülasyonu",
+                $"'{transaction.ProductTitle}' ürünü için ödemeyi tamamlamak üzeresiniz (Bu gerçek bir ödeme değildir). Devam etmek istiyor musunuz?",
+                "Evet, Tamamla", "Hayır");
+
+            if (!confirm) return;
+
+            IsLoading = true;
+
+            try
+            {
+                // Not: _transactionService'i direkt kullanmak yerine,
+                // Bağımlılığın doğru enjekte edildiğinden emin olmak için App'ten de alabiliriz,
+                // ancak constructor'da zaten enjekte edilmiş.
+                // Eğer _transactionService'in tipi FirebaseTransactionService değilse
+                // (ki ITransactionService olarak enjekte ediliyor),
+                // en güvenli yol servisi DI'dan tekrar çözmektir.
+
+                var service = App.Current.Handler.MauiContext.Services.GetService<ITransactionService>();
+
+                if (service is FirebaseTransactionService firebaseService)
+                {
+                    var currentUser = await _authService.GetCurrentUserAsync();
+                    if (currentUser != null)
+                    {
+                        var result = await firebaseService.CompletePaymentAsync(transaction.TransactionId, currentUser.UserId);
+
+                        if (result.Success)
+                        {
+                            await Application.Current.MainPage.DisplayAlert("Başarılı", "Ödeme tamamlandı ve işlem sonuçlandırıldı.", "Tamam");
+                            // Real-time listener (StartListeningForOffers) değişikliği otomatik olarak yakalamalı.
+                        }
+                        else
+                        {
+                            await Application.Current.MainPage.DisplayAlert("Hata", result.Message ?? "Ödeme tamamlanamadı.", "Tamam");
+                        }
+                    }
+                    else
+                    {
+                        await Application.Current.MainPage.DisplayAlert("Hata", "Mevcut kullanıcı bulunamadı.", "Tamam");
+                    }
+                }
+                else
+                {
+                    await Application.Current.MainPage.DisplayAlert("Hata", "Ödeme servisi (FirebaseTransactionService) bulunamadı.", "Tamam");
+                }
+            }
+            catch (Exception ex)
+            {
+                await Application.Current.MainPage.DisplayAlert("Hata", $"Bir hata oluştu: {ex.Message}", "Tamam");
+            }
+            finally
+            {
+                IsLoading = false;
+            }
         }
 
         private async void StartListeningForOffers()

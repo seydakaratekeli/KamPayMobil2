@@ -67,22 +67,29 @@ namespace KamPay.Models
         {
             get
             {
+                // Önce TAMAMLANAN durumlar (IsSold)
                 if (IsSold && Type == ProductType.Takas)
                     return "TAKAS YAPILDI ✓";
 
                 if (IsSold && Type == ProductType.Satis)
                     return "SATILDI ✓";
 
+                if (IsSold && Type == ProductType.Bagis) // YENİ EKLENDİ
+                    return "BAĞIŞLANDI ✓";
+
+                // Sonra BEKLEYEN durumlar (IsReserved)
                 if (IsReserved && Type == ProductType.Takas)
-                    return "REZERVE EDİLDİ";
+                    return "TAKAS SÜRECİNDE";
 
                 if (IsReserved && Type == ProductType.Satis)
-                    return "SATIŞ BEKLİYOR";
+                    return "SATIŞ SÜRECİNDE";
+
+                if (IsReserved && Type == ProductType.Bagis) // YENİ EKLENDİ
+                    return "BAĞIŞ SÜRECİNDE"; // Veya "BAĞIŞ İÇİN AYRILDI"
 
                 return string.Empty;
             }
         }
-
         /// <summary>
         /// Etiket rengi
         /// </summary>

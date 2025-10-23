@@ -83,7 +83,8 @@ namespace KamPay
            new FirebaseTransactionService(
           sp.GetRequiredService<INotificationService>(),
           sp.GetRequiredService<IProductService>(),
-          sp.GetRequiredService<IQRCodeService>()) // IQRCodeService'i buraya ekleyin
+          sp.GetRequiredService<IQRCodeService>(),
+            sp.GetRequiredService<IUserProfileService>()) // IQRCodeService'i buraya ekleyin
   );
 
             // ViewModels

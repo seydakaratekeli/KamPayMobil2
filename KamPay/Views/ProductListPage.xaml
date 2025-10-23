@@ -14,6 +14,7 @@
             <converters:EqualityToBackgroundConverter x:Key="EqualityToBackgroundConverter" />
             <converters:EqualityToBorderColorConverter x:Key="EqualityToBorderColorConverter" />
             <converters:EqualityToTextColorConverter x:Key="EqualityToTextColorConverter" />
+            <converters:StringIsNotNullOrEmptyConverter x:Key="StringIsNotNullOrEmptyConverter"/>
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -97,42 +98,32 @@
                                             <Label Text="{Binding ViewCount}" />
                                         </HorizontalStackLayout>
                                     </VerticalStackLayout>
-                                    
-                                    
-                                    
+            
                                 </Grid>
-                                <!-- İlk overlay: REZERVE EDİLDİ -->
-                                <Border IsVisible="{Binding IsReserved}" 
-            BackgroundColor="#99FF9800" 
-            Padding="10,5" 
-            HorizontalOptions="Start" 
-            VerticalOptions="Start" 
+
+                                <Grid>
+                                    <Grid ColumnDefinitions="120, *" ColumnSpacing="10">
+                                    </Grid>
+                                    
+                                    <Border IsVisible="{Binding StatusText, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"
+            BackgroundColor="{Binding StatusColor}"
+            Opacity="0.9"
+            Padding="10,5"
+            HorizontalOptions="Start"
+            VerticalOptions="Start"
             StrokeThickness="0">
                                     <Border.StrokeShape>
                                         <RoundRectangle CornerRadius="0,0,15,0" />
                                     </Border.StrokeShape>
                                     <Label Text="{Binding StatusText}"
-               TextColor="White" 
-               FontSize="10" 
+               TextColor="White"
+               FontSize="10"
                FontAttributes="Bold"/>
+                                    
+                                        
                                 </Border>
+                                </Grid>
 
-                                <!-- İkinci overlay: TAKAS YAPILDI -->
-                                <Border IsVisible="{Binding IsSold}" 
-            BackgroundColor="#CC4CAF50"
-            Padding="15"
-            HorizontalOptions="Fill"
-            VerticalOptions="Fill">
-                                    <Border.StrokeShape>
-                                        <RoundRectangle CornerRadius="10" />
-                                    </Border.StrokeShape>
-                                    <Label Text="{Binding StatusText}"
-               TextColor="White" 
-               FontSize="18" 
-               FontAttributes="Bold" 
-               HorizontalOptions="Center" 
-               VerticalOptions="Center" />
-                                </Border>
                             </Grid>
                         
                         

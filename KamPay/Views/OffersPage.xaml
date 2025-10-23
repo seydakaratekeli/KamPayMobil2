@@ -11,10 +11,14 @@
     <ContentPage.Resources>
         <converters:EqualityToBoolConverter x:Key="EqualityToBoolConverter"/>
         <converters:StringIsNotNullOrEmptyConverter x:Key="StringIsNotNullOrEmptyConverter"/>
+        <converters:ConfirmDonationButtonVisibilityConverter x:Key="ConfirmDonationButtonVisibilityConverter"/>
+        <converters:SimulatePaymentButtonVisibilityConverter x:Key="SimulatePaymentButtonVisibilityConverter"/>
+
     </ContentPage.Resources>
 
     <Grid RowDefinitions="Auto, *">
         <Grid Grid.Row="0" ColumnDefinitions="*,*" Padding="15,10" ColumnSpacing="10">
+
             <Button Grid.Column="0" Text="Gelen Teklifler" Command="{Binding SelectIncomingCommand}">
                 <Button.Style>
                     <Style TargetType="Button">
@@ -30,6 +34,7 @@
                     </Style>
                 </Button.Style>
             </Button>
+
             <Button Grid.Column="1" Text="Giden Tekliflerim" Command="{Binding SelectOutgoingCommand}">
                 <Button.Style>
                     <Style TargetType="Button">
@@ -45,6 +50,7 @@
                     </Style>
                 </Button.Style>
             </Button>
+
         </Grid>
 
         <RefreshView Grid.Row="1" 
@@ -124,7 +130,23 @@
                                                IsVisible="{Binding OfferMessage, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
                                         <Label Text="{Binding OfferedProductTitle, StringFormat='Teklif Ettiğiniz Ürün: {0}'}" 
                                                IsVisible="{Binding OfferedProductTitle, Converter={StaticResource StringIsNotNullOrEmptyConverter}}"/>
+
+
                                         <Label FontAttributes="Italic" Text="{Binding StatusText, StringFormat='Durum: {0}'}" />
+
+                                        <Button Text="Ödemeyi Tamamla (Simülasyon)"
+        IsVisible="{Binding Path=., Converter={StaticResource SimulatePaymentButtonVisibilityConverter}}"
+        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=CompletePaymentCommand}"
+        CommandParameter="{Binding .}"
+        BackgroundColor="Orange"
+        TextColor="White"/>
+
+                                        <Button Text="Bağışı Teslim Aldım"
+        IsVisible="{Binding Path=., Converter={StaticResource ConfirmDonationButtonVisibilityConverter}}"
+        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:OffersViewModel}}, Path=ConfirmDonationReceivedCommand}"
+        CommandParameter="{Binding .}"
+        BackgroundColor="Green"
+        TextColor="White"/>
 
                                         <Button Text="Teslimatı Yönet" 
                                                 IsVisible="{Binding CanManageDelivery}" 
@@ -139,4 +161,5 @@
             </ScrollView>
         </RefreshView>
     </Grid>
+
 </ContentPage>

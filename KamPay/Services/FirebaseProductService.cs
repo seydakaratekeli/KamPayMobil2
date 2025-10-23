@@ -440,50 +440,34 @@ public class FirebaseProductService : IProductService
     /// <summary>
     /// SATIŞ işlemlerinde kullanılır - Ürün anasayfadan kaldırılır
     /// </summary>
+    // KamPay/Services/FirebaseProductService.cs
+
     public async Task<ServiceResult<bool>> MarkAsSoldAsync(string productId)
     {
         try
         {
-            var product = await _firebaseClient
-                .Child(Constants.ProductsCollection)
-                .Child(productId)
-                .OnceSingleAsync<Product>();
-
-            if (product == null)
+            var productNode = _firebaseClient.Child(Constants.ProductsCollection).Child(productId);
+            var product = await productNode.OnceSingleAsync<Product>();
+            if (product != null)
             {
-                return ServiceResult<bool>.FailureResult("Ürün bulunamadı");
+                // Güncellemeler:
+                product.IsActive = false;   // Ana listeden kaldırır
+                product.IsReserved = false; // Artık rezerve değil
+                product.IsSold = true;      // SATILDI olarak işaretler
+                product.SoldAt = DateTime.UtcNow; // Satılma zamanını kaydeder
+
+                await productNode.PutAsync(product);
+                return ServiceResult<bool>.SuccessResult(true, "Ürün satıldı olarak işaretlendi.");
             }
-
-            // 🔹 Satış için: Anasayfadan kaldır
-            product.IsSold = true;
-            product.IsReserved = false;
-            product.IsActive = false; // ❗ Önemli: Satışta pasif olur
-            product.SoldAt = DateTime.UtcNow;
-
-            // 🔹 Kullanıcının aktif ürün sayısını azalt
-            var userStatsRef = _firebaseClient
-                .Child("user_stats")
-                .Child(product.UserId);
-
-            var stats = await userStatsRef.OnceSingleAsync<UserStats>();
-            if (stats != null && stats.TotalProducts > 0)
-            {
-                stats.TotalProducts--;
-                await userStatsRef.PutAsync(stats);
-            }
-
-            await _firebaseClient
-                .Child(Constants.ProductsCollection)
-                .Child(productId)
-                .PutAsync(product);
-
-            return ServiceResult<bool>.SuccessResult(true, "Ürün satıldı olarak işaretlendi");
+            return ServiceResult<bool>.FailureResult("Ürün bulunamadı.");
         }
         catch (Exception ex)
         {
-            return ServiceResult<bool>.FailureResult("İşlem başarısız", ex.Message);
+            return ServiceResult<bool>.FailureResult("Ürün işaretlenirken hata oluştu.", ex.Message);
         }
     }
+
+
     public async Task<ServiceResult<bool>> MarkAsReservedAsync(string productId, bool isReserved)
     {
         try

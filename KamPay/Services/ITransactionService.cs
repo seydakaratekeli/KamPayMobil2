@@ -20,5 +20,10 @@ namespace KamPay.Services
 
         // Kullanýcýya gelen teklifleri listeler
         Task<ServiceResult<List<Transaction>>> GetIncomingOffersAsync(string userId);
+
+        Task<ServiceResult<Transaction>> CompletePaymentAsync(string transactionId, string buyerId); // YENÝ METOT
+
+        Task<ServiceResult<Transaction>> ConfirmDonationAsync(string transactionId, string buyerId);
+
     }
 }
