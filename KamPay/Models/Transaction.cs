@@ -1,4 +1,5 @@
-﻿using KamPay.Models;
+﻿// KamPay/Models/Transaction.cs
+using KamPay.Models;
 using System;
 using System.Text.Json.Serialization;
 using System.Collections.Generic;
@@ -29,7 +30,11 @@ namespace KamPay.Models
         // 🆕 Yeni eklenen ödeme bilgileri (simülasyon desteği için)
         public PaymentMethodType PaymentMethod { get; set; } = PaymentMethodType.None; // CardSim, BankTransferSim vb.
         public string? PaymentSimulationId { get; set; } // OTP ile eşleşecek ID
-        public decimal QuotedPrice { get; set; } // Satış anındaki kilitli fiyat
+
+        // *** HATA DÜZELTMESİ: EKSİK ALAN BURAYA EKLENDİ ***
+        public decimal Price { get; set; } // Ürünün orijinal liste fiyatı
+
+        public decimal QuotedPrice { get; set; } // Satış anındaki kilitli fiyat (pazarlık vb.)
         public string Currency { get; set; } = "TRY"; // Para birimi
         public DateTime? PaymentCompletedAt { get; set; } // Ödeme tamamlanma zamanı
 
@@ -47,6 +52,8 @@ namespace KamPay.Models
         {
             get
             {
+                // NOT: Bu StatusText mantığı, yeni 'Completed' durumunu (PaymentStatus.Paid) 
+                // henüz yansıtmıyor olabilir. Şimdilik hatayı çözmeye odaklanalım.
                 if (Status == TransactionStatus.Accepted && DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed))
                     return "Tamamlandı";
 
@@ -80,11 +87,11 @@ namespace KamPay.Models
     // 🔸 İşlem Durumu
     public enum TransactionStatus
     {
-        Pending,      // Teklif yapıldı, satıcının onayı bekliyor
-        Accepted,     // Teklif kabul edildi, teslimat süreci bekleniyor
-        Rejected,     // Teklif reddedildi
-        Completed,    // Teslimat tamamlandı ve işlem kapandı
-        Cancelled     // Taraflardan biri iptal etti
+        Pending,     // Teklif yapıldı, satıcının onayı bekliyor
+        Accepted,    // Teklif kabul edildi, teslimat/ödeme süreci bekleniyor
+        Rejected,    // Teklif reddedildi
+        Completed,   // İşlem (ödeme/teslimat) tamamlandı ve kapandı
+        Cancelled    // Taraflardan biri iptal etti
     }
 
     // 🔸 Ödeme Durumu
@@ -95,12 +102,4 @@ namespace KamPay.Models
         Failed   // Başarısız
     }
 
-    // 🆕 Yeni: Ödeme Türleri (CardSim, EFTSim vs.)
-    public enum PaymentMethodType
-    {
-        None,
-        CardSim,          // Kart ile ödeme simülasyonu
-        BankTransferSim,  // EFT / Havale simülasyonu
-        WalletSim         // Cüzdan / bakiye simülasyonu (isteğe bağlı)
-    }
 }
