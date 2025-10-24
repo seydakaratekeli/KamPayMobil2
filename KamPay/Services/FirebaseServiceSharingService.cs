@@ -1,11 +1,12 @@
-using Firebase.Database;
+﻿using Firebase.Database;
 using Firebase.Database.Query;
 using KamPay.Models;
 using KamPay.Helpers;
 using System; 
 using System.Collections.Generic; 
 using System.Linq; 
-using System.Threading.Tasks; 
+using System.Threading.Tasks;
+using System.Threading; // Delay için
 
 namespace KamPay.Services
 {
@@ -13,9 +14,19 @@ namespace KamPay.Services
     {
         private readonly FirebaseClient _firebaseClient;
         private readonly INotificationService _notificationService; // Bildirim servisini ekleyin
-        private readonly IUserProfileService _userProfileService; // YEN� SERV�S
+        private readonly IUserProfileService _userProfileService; // YENİ SERVİS
+                                                                  // Basit OTP modeli (geçici koleksiyon için)
+        internal class TempOtpModel
+        {
+            public string Otp { get; set; }
+            public DateTime ExpiresAt { get; set; }
+        }
 
-        // Constructor'� INotificationService alacak �ekilde g�ncelleyin
+        private string GenerateOtp() => new Random().Next(100000, 999999).ToString();
+        private string GenerateBankReference() => $"BTX-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString().Substring(0, 6)}";
+
+
+        // Constructor'ı INotificationService alacak şekilde güncelleyin
         public FirebaseServiceSharingService(INotificationService notificationService, IUserProfileService userProfileService)
         {
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
@@ -23,7 +34,7 @@ namespace KamPay.Services
             _userProfileService = userProfileService; // Ata
         }
 
-        // ... CreateServiceOfferAsync ve GetServiceOffersAsync metotlar� ayn� kalacak ...
+        // ... CreateServiceOfferAsync ve GetServiceOffersAsync metotları aynı kalacak ...
         public async Task<ServiceResult<ServiceOffer>> CreateServiceOfferAsync(ServiceOffer offer)
         {
             try
@@ -33,7 +44,7 @@ namespace KamPay.Services
                     .Child(offer.ServiceId)
                     .PutAsync(offer);
 
-                return ServiceResult<ServiceOffer>.SuccessResult(offer, "Hizmet payla��ld�!");
+                return ServiceResult<ServiceOffer>.SuccessResult(offer, "Hizmet paylaşıldı!");
             }
             catch (Exception ex)
             {
@@ -63,46 +74,64 @@ namespace KamPay.Services
             }
         }
 
-        // --- YEN� IMPLEMENTE ED�LEN METOTLAR ---
-
         public async Task<ServiceResult<ServiceRequest>> RequestServiceAsync(ServiceOffer offer, User requester, string message)
         {
             try
             {
+                if (offer == null || requester == null)
+                    return new ServiceResult<ServiceRequest>
+                    {
+                        Success = false,
+                        Message = "Hizmet veya kullanıcı bilgisi eksik."
+                    };
+
+                // 🟢 Yeni ServiceRequest nesnesi oluşturuluyor
                 var request = new ServiceRequest
                 {
-                    ServiceId = offer.ServiceId,
+                    RequestId = Guid.NewGuid().ToString(),
+                    ServiceId = offer.ServiceId,            // Hizmet kimliği
                     ServiceTitle = offer.Title,
                     ProviderId = offer.ProviderId,
                     RequesterId = requester.UserId,
                     RequesterName = requester.FullName,
                     Message = message,
-                    TimeCreditValue = offer.TimeCredits // YEN�: Kredi de�erini kaydet
+                    Status = ServiceRequestStatus.Pending,
+                    RequestedAt = DateTime.UtcNow,
+
+                    // 🟢 Otomatik atanacak alanlar:
+                    QuotedPrice = offer.Price,              // Hizmetin o anki fiyatı
+                    Price = offer.Price,                    // UI veya raporlama için de saklıyoruz
+                    TimeCreditValue = offer.TimeCredits,    // Kredi bilgisi (eski sistemle uyumlu)
+                    PaymentStatus = ServicePaymentStatus.None,
+                    PaymentMethod = PaymentMethodType.None,
+                    Currency = "TRY"
                 };
 
+                // 🧾 Firebase’e kaydet
                 await _firebaseClient
                     .Child(Constants.ServiceRequestsCollection)
                     .Child(request.RequestId)
                     .PutAsync(request);
 
-                // Hizmeti sunan ki�iye bildirim g�nder
-                await _notificationService.CreateNotificationAsync(new Notification
+                return new ServiceResult<ServiceRequest>
                 {
-                    UserId = offer.ProviderId,
-                    Type = NotificationType.NewOffer, // Bu tipi genel teklifler i�in kullanabiliriz
-                    Title = "Yeni Hizmet Talebi",
-                    Message = $"{requester.FullName}, '{offer.Title}' hizmetin i�in bir talep g�nderdi.",
-                    ActionUrl = "///ProfilePage" // �imdilik profile y�nlendirelim
-                });
-
-                return ServiceResult<ServiceRequest>.SuccessResult(request, "Talebiniz ba�ar�yla g�nderildi.");
+                    Success = true,
+                    Message = "Hizmet talebiniz başarıyla oluşturuldu.",
+                    Data = request
+                };
             }
             catch (Exception ex)
             {
-                return ServiceResult<ServiceRequest>.FailureResult("Talep g�nderilirken hata olu�tu.", ex.Message);
+                return new ServiceResult<ServiceRequest>
+                {
+                    Success = false,
+                    Message = $"Talep oluşturulamadı: {ex.Message}"
+                };
             }
         }
-        // YEN� METODU IMPLEMENTE ED�N
+
+
+        // YENİ METODU IMPLEMENTE EDİN
         public async Task<ServiceResult<bool>> CompleteRequestAsync(string requestId, string currentUserId)
         {
             try
@@ -110,49 +139,48 @@ namespace KamPay.Services
                 var requestNode = _firebaseClient.Child(Constants.ServiceRequestsCollection).Child(requestId);
                 var request = await requestNode.OnceSingleAsync<ServiceRequest>();
 
-                if (request == null) return ServiceResult<bool>.FailureResult("Talep bulunamad�.");
+                if (request == null) return ServiceResult<bool>.FailureResult("Talep bulunamadı.");
 
-                // Sadece hizmeti talep eden ki�i tamamland� olarak i�aretleyebilir
+                // Sadece hizmeti talep eden kişi tamamlandı olarak işaretleyebilir
                 if (request.RequesterId != currentUserId)
-                    return ServiceResult<bool>.FailureResult("Bu i�lemi yapmaya yetkiniz yok.");
+                    return ServiceResult<bool>.FailureResult("Bu işlemi yapmaya yetkiniz yok.");
 
                 if (request.Status != ServiceRequestStatus.Accepted)
-                    return ServiceResult<bool>.FailureResult("Bu talep hen�z onaylanmam�� veya zaten tamamlanm��.");
+                    return ServiceResult<bool>.FailureResult("Bu talep henüz onaylanmamış veya zaten tamamlanmış.");
 
                 // 1. Kredi transferini yap
                 var transferResult = await _userProfileService.TransferTimeCreditsAsync(
                     request.RequesterId,
                     request.ProviderId,
                     request.TimeCreditValue,
-                    $"Hizmet tamamland�: {request.ServiceTitle}"
+                    $"Hizmet tamamlandı: {request.ServiceTitle}"
                 );
 
                 if (!transferResult.Success)
                 {
-                    return ServiceResult<bool>.FailureResult($"Kredi transferi ba�ar�s�z: {transferResult.Message}");
+                    return ServiceResult<bool>.FailureResult($"Kredi transferi başarısız: {transferResult.Message}");
                 }
 
-                // 2. Talebin durumunu g�ncelle
+                // 2. Talebin durumunu güncelle
                 request.Status = ServiceRequestStatus.Completed;
                 await requestNode.PutAsync(request);
 
-                // 3. Hizmeti sunan ki�iye bildirim g�nder
+                // 3. Hizmeti sunan kişiye bildirim gönder
                 await _notificationService.CreateNotificationAsync(new Notification
                 {
                     UserId = request.ProviderId,
-                    Title = "Hizmet Tamamland� ve Kredi Kazand�n!",
-                    Message = $"{request.RequesterName}, '{request.ServiceTitle}' hizmetini tamamland� olarak i�aretledi. Hesab�na {request.TimeCreditValue} saat kredi eklendi."
+                    Title = "Hizmet Tamamlandı ve Kredi Kazandın!",
+                    Message = $"{request.RequesterName}, '{request.ServiceTitle}' hizmetini tamamlandı olarak işaretledi. Hesabına {request.TimeCreditValue} saat kredi eklendi."
                 });
 
-                return ServiceResult<bool>.SuccessResult(true, "Hizmet ba�ar�yla tamamland�.");
+                return ServiceResult<bool>.SuccessResult(true, "Hizmet başarıyla tamamlandı.");
             }
             catch (Exception ex)
             {
-                return ServiceResult<bool>.FailureResult("��lem s�ras�nda hata olu�tu.", ex.Message);
+                return ServiceResult<bool>.FailureResult("İşlem sırasında hata oluştu.", ex.Message);
             }
         }
 
-        // KamPay/Services/FirebaseServiceSharingService.cs
 
         public async Task<ServiceResult<(List<ServiceRequest> Incoming, List<ServiceRequest> Outgoing)>> GetMyServiceRequestsAsync(string userId)
         {
@@ -160,7 +188,7 @@ namespace KamPay.Services
             {
                 if (string.IsNullOrEmpty(userId))
                 {
-                    return ServiceResult<(List<ServiceRequest>, List<ServiceRequest>)>.FailureResult("Kullan�c� ID'si bulunamad�.");
+                    return ServiceResult<(List<ServiceRequest>, List<ServiceRequest>)>.FailureResult("Kullanıcı ID'si bulunamadı.");
                 }
 
                 var incomingRequestsTask = _firebaseClient
@@ -177,7 +205,7 @@ namespace KamPay.Services
 
                 await Task.WhenAll(incomingRequestsTask, outgoingRequestsTask);
 
-                // HATA 2 ve 3 D�ZELTMES�: 'CreatedAt' yerine 'RequestedAt' kullan�l�yor.
+                // HATA 2 ve 3 DÜZELTMESİ: 'CreatedAt' yerine 'RequestedAt' kullanılıyor.
                 var incoming = incomingRequestsTask.Result
                     .Select(item => { item.Object.RequestId = item.Key; return item.Object; })
                     .OrderByDescending(r => r.RequestedAt)
@@ -188,16 +216,203 @@ namespace KamPay.Services
                     .OrderByDescending(r => r.RequestedAt)
                     .ToList();
 
-                // HATA 1 D�ZELTMES�: Geri d�nd�r�len Tuple'a do�ru isimler veriliyor.
+                // HATA 1 DÜZELTMESİ: Geri döndürülen Tuple'a doğru isimler veriliyor.
                 return ServiceResult<(List<ServiceRequest>, List<ServiceRequest>)>.SuccessResult((Incoming: incoming, Outgoing: outgoing));
             }
             catch (Exception ex)
             {
-                return ServiceResult<(List<ServiceRequest>, List<ServiceRequest>)>.FailureResult("Talepler getirilirken bir hata olu�tu.", ex.Message);
+                return ServiceResult<(List<ServiceRequest>, List<ServiceRequest>)>.FailureResult("Talepler getirilirken bir hata oluştu.", ex.Message);
+            }
+        }
+      
+
+        // 3.1 Ödeme başlat (simülasyon)
+        public async Task<ServiceResult<PaymentDto>> CreatePaymentSimulationAsync(string requestId, string method)
+        {
+            try
+            {
+                var requestNode = _firebaseClient.Child(Constants.ServiceRequestsCollection).Child(requestId);
+                var request = await requestNode.OnceSingleAsync<ServiceRequest>();
+                if (request == null) return ServiceResult<PaymentDto>.FailureResult("Talep bulunamadı.");
+
+                if (request.PaymentStatus != ServicePaymentStatus.None && request.PaymentStatus != ServicePaymentStatus.Failed)
+                    return ServiceResult<PaymentDto>.FailureResult("Bu talep için ödeme zaten başlatılmış.");
+
+                // Miktarı belirle (QuotedPrice varsa onu kullan)
+                var amount = (decimal)(request.QuotedPrice ?? request.TimeCreditValue);
+
+                var payment = new PaymentDto
+                {
+                    Amount = amount,
+                    Currency = "TRY",
+                    Status = ServicePaymentStatus.Initiated,
+                    Method = method?.ToLower() switch
+                    {
+                        "cardsim" => PaymentMethodType.CardSim,
+                        "banktransfersim" or "eft" or "havale" => PaymentMethodType.BankTransferSim,
+                        "walletsim" => PaymentMethodType.WalletSim,
+                        _ => PaymentMethodType.CardSim
+                    }
+                };
+
+                // Kart ise OTP üretip kısa süreli saklayalım (gerçekçi his)
+                if (payment.Method == PaymentMethodType.CardSim)
+                {
+                    var otp = GenerateOtp();
+
+                    // 🔽🔽🔽 BURAYA EKLE:
+                    await _firebaseClient
+                        .Child(Constants.TempOtpsCollection)
+                        .Child(payment.PaymentId)
+                        .PutAsync(new TempOtpModel
+                        {
+                            Otp = otp,
+                            ExpiresAt = DateTime.UtcNow.AddMinutes(2)
+                        });
+                    // 🔼🔼🔼 BURAYA EKLE
+
+                    // İstersen burada log veya debug:
+                    // Console.WriteLine($"OTP oluşturuldu: {otp}");
+                }
+
+                // EFT ise simüle bir referans üret
+                if (payment.Method == PaymentMethodType.BankTransferSim)
+                {
+                    payment.BankName = "Ziraat Bankası";
+                    payment.BankReference = GenerateBankReference();
+                }
+
+                // Request üzerinde ödeme bilgilerini işaretle
+                request.PaymentStatus = ServicePaymentStatus.Initiated;
+
+                request.PaymentSimulationId = payment.PaymentId;
+                request.PaymentMethod = payment.Method;
+                await requestNode.PutAsync(request);
+
+                return ServiceResult<PaymentDto>.SuccessResult(payment, "Ödeme başlatıldı (simülasyon).");
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<PaymentDto>.FailureResult("Simülasyon başlatılırken hata.", ex.Message);
             }
         }
 
-        // Bu metot �u an kullan�lm�yor ama ileride talepleri yan�tlarken gerekecek.
+        // 3.2 Ödeme onayla (simülasyon)
+        // Kartta OTP doğrular; EFT'de başarı/başarısız simüle edebilir.
+        public async Task<ServiceResult<bool>> ConfirmPaymentSimulationAsync(string requestId, string paymentId, string? otp = null)
+        {
+            try
+            {
+                var requestNode = _firebaseClient.Child(Constants.ServiceRequestsCollection).Child(requestId);
+                var request = await requestNode.OnceSingleAsync<ServiceRequest>();
+                if (request == null) return ServiceResult<bool>.FailureResult("Talep bulunamadı.");
+
+                if (request.PaymentSimulationId != paymentId)
+                    return ServiceResult<bool>.FailureResult("Geçersiz ödeme kimliği.");
+
+                if (request.PaymentStatus == ServicePaymentStatus.Paid)
+                    return ServiceResult<bool>.SuccessResult(true, "Ödeme zaten onaylanmış.");
+
+                // Kart için OTP kontrolü
+                if (request.PaymentMethod == PaymentMethodType.CardSim)
+                {
+                    var otpNode = _firebaseClient.Child(Constants.TempOtpsCollection).Child(paymentId);
+                    var saved = await otpNode.OnceSingleAsync<TempOtpModel>();
+                    if (saved == null) return ServiceResult<bool>.FailureResult("OTP bulunamadı.");
+
+                    if (DateTime.UtcNow > saved.ExpiresAt)
+                        return ServiceResult<bool>.FailureResult("OTP süresi doldu.");
+
+                    // 🔄 Demo modu: Eğer UI'dan OTP gelmemişse otomatik geçerli say
+                    if (string.IsNullOrWhiteSpace(otp))
+                    {
+                        otp = saved.Otp; // demo için doğru kabul
+                    }
+
+                    // Şimdi kontrol et
+                    if (saved.Otp != otp)
+                        return ServiceResult<bool>.FailureResult("OTP geçersiz.");
+
+                }
+
+                // EFT ise bu noktada direkt onaylayabilir veya ayrı bir "beklemede" süreci de kurgulanabilir
+                request.PaymentStatus = ServicePaymentStatus.Paid;
+                await requestNode.PutAsync(request);
+
+                return ServiceResult<bool>.SuccessResult(true, "Ödeme onaylandı (simülasyon).");
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<bool>.FailureResult("Ödeme onayında hata.", ex.Message);
+            }
+        }
+
+        // 3.3 Tek adımda: Ödeme simülasyonu + Tamamlama
+        public async Task<ServiceResult<bool>> SimulatePaymentAndCompleteAsync(string requestId, string currentUserId, PaymentMethodType method = PaymentMethodType.CardSim, string? maskedCardLast4 = null)
+        {
+            try
+            {
+                var requestNode = _firebaseClient.Child(Constants.ServiceRequestsCollection).Child(requestId);
+                var request = await requestNode.OnceSingleAsync<ServiceRequest>();
+                if (request == null) return ServiceResult<bool>.FailureResult("Talep bulunamadı.");
+
+                // Yetki & durum kontrolleri
+                if (request.RequesterId != currentUserId)
+                    return ServiceResult<bool>.FailureResult("Bu işlemi yapmaya yetkiniz yok.");
+                if (request.Status != ServiceRequestStatus.Accepted)
+                    return ServiceResult<bool>.FailureResult("Talep henüz onaylanmamış veya tamamlanmış.");
+
+                // 1) Ödeme başlat
+                var createResult = await CreatePaymentSimulationAsync(requestId, method.ToString());
+                if (!createResult.Success) return ServiceResult<bool>.FailureResult(createResult.Message);
+                var payment = createResult.Data;
+
+                // Kartsa UI üzerinden OTP toplanmasını beklediğini varsayabiliriz.
+                // Burada gerçek projende ya:
+                //  - A) UI, ConfirmPaymentSimulationAsync'i ayrı çağırır (önerilen)
+                //  - B) veya burada kısa bir beklemenin ardından "otomatik onay" yapılır (demo için):
+                if (payment.Method == PaymentMethodType.CardSim)
+                {
+                    await Task.Delay(1000);
+                    // Demo için otomatik OTP = doğru kabul:
+                    // OTP parametresi null gönderilirse, metod içindeki otomatik demo doğrulaması çalışır
+                    var confirm = await ConfirmPaymentSimulationAsync(requestId, payment.PaymentId, otp: null);
+                    if (!confirm.Success) return ServiceResult<bool>.FailureResult(confirm.Message);
+                }
+                else if (payment.Method == PaymentMethodType.BankTransferSim)
+                {
+                    // EFT/havale simülasyonu: kısa bekleme + doğrudan onay (demo)
+                    await Task.Delay(new Random().Next(1200, 3000));
+                    var confirm = await ConfirmPaymentSimulationAsync(requestId, payment.PaymentId);
+                    if (!confirm.Success) return ServiceResult<bool>.FailureResult(confirm.Message);
+                }
+
+                // 2) Tamamlama
+                request.PaymentStatus = ServicePaymentStatus.Paid;
+                request.Status = ServiceRequestStatus.Completed;
+                if (!string.IsNullOrWhiteSpace(maskedCardLast4))
+                {
+                    // masked last4 bilgisini saklamak istersen PaymentDto tarafında tutup loglayabilirsin
+                }
+                await requestNode.PutAsync(request);
+
+                // Bildirim
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserId = request.ProviderId,
+                    Title = "Hizmet Ücreti Simüle Edildi!",
+                    Message = $"{request.RequesterName}, '{request.ServiceTitle}' hizmeti için ödemeyi simüle etti. Hizmet tamamlandı."
+                });
+
+                return ServiceResult<bool>.SuccessResult(true, "Ödeme simüle edildi ve hizmet tamamlandı.");
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<bool>.FailureResult("Simülasyon tamamlanamadı.", ex.Message);
+            }
+        }
+
+        // Bu metot şu an kullanılmıyor ama ileride talepleri yanıtlarken gerekecek.
         public async Task<ServiceResult<bool>> RespondToRequestAsync(string requestId, bool accept)
         {
             try
@@ -207,28 +422,34 @@ namespace KamPay.Services
 
                 if (request == null)
                 {
-                    return ServiceResult<bool>.FailureResult("Talep bulunamad�.");
+                    return ServiceResult<bool>.FailureResult("Talep bulunamadı.");
                 }
 
                 request.Status = accept ? ServiceRequestStatus.Accepted : ServiceRequestStatus.Declined;
                 await requestNode.PutAsync(request);
 
-                // Talebi g�nderen ki�iye bildirim g�nder
+                // Talebi gönderen kişiye bildirim gönder
                 await _notificationService.CreateNotificationAsync(new Notification
                 {
                     UserId = request.RequesterId,
                     Type = accept ? NotificationType.OfferAccepted : NotificationType.OfferRejected,
-                    Title = accept ? "Hizmet Talebin Onayland�!" : "Hizmet Talebin Reddedildi",
-                    Message = $"'{request.ServiceTitle}' hizmeti i�in talebin {(accept ? "kabul edildi." : "reddedildi.")}",
+                    Title = accept ? "Hizmet Talebin Onaylandı!" : "Hizmet Talebin Reddedildi",
+                    Message = $"'{request.ServiceTitle}' hizmeti için talebin {(accept ? "kabul edildi." : "reddedildi.")}",
                     ActionUrl = "///ServiceSharingPage"
                 });
 
-                return ServiceResult<bool>.SuccessResult(true, "Talep yan�tland�.");
+                return ServiceResult<bool>.SuccessResult(true, "Talep yanıtlandı.");
             }
             catch (Exception ex)
             {
-                return ServiceResult<bool>.FailureResult("��lem s�ras�nda hata olu�tu.", ex.Message);
+                return ServiceResult<bool>.FailureResult("İşlem sırasında hata oluştu.", ex.Message);
             }
         }
     }
+
+
+
+
+
+
 }

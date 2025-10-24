@@ -1,10 +1,11 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+ï»¿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KamPay.Models;
 using KamPay.Services;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using System;
 
 namespace KamPay.ViewModels
 {
@@ -19,16 +20,42 @@ namespace KamPay.ViewModels
         public ObservableCollection<ServiceRequest> IncomingRequests { get; } = new();
         public ObservableCollection<ServiceRequest> OutgoingRequests { get; } = new();
 
+        public ObservableCollection<PaymentOption> PaymentMethods { get; }
+
         public ServiceRequestsViewModel(IServiceSharingService serviceService, IAuthenticationService authService)
         {
             _serviceService = serviceService;
             _authService = authService;
+
+            // ðŸŸ¢ Ã–deme yÃ¶ntemleri
+            PaymentMethods = new ObservableCollection<PaymentOption>
+            {
+                new PaymentOption { Method = PaymentMethodType.CardSim, DisplayName = "Kart (SimÃ¼lasyon)" },
+                new PaymentOption { Method = PaymentMethodType.BankTransferSim, DisplayName = "EFT / Havale (SimÃ¼lasyon)" }
+            };
         }
 
-        // KamPay/ViewModels/ServiceRequestsViewModel.cs
+        public class PaymentOption
+        {
+            public PaymentMethodType Method { get; set; }
+            public string DisplayName { get; set; }
+        }
 
-        // KamPay/ViewModels/ServiceRequestsViewModel.cs
+        private PaymentMethodType _selectedPaymentMethod = PaymentMethodType.CardSim;
+        public PaymentMethodType SelectedPaymentMethod
+        {
+            get => _selectedPaymentMethod;
+            set
+            {
+                if (_selectedPaymentMethod != value)
+                {
+                    _selectedPaymentMethod = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
+        // ðŸ§­ Talepleri yÃ¼kle
         [RelayCommand]
         private async Task LoadRequestsAsync()
         {
@@ -39,27 +66,17 @@ namespace KamPay.ViewModels
                 var currentUser = await _authService.GetCurrentUserAsync();
                 if (currentUser == null) return;
 
-                // Servisten artýk iki liste içeren bir Tuple geliyor
                 var result = await _serviceService.GetMyServiceRequestsAsync(currentUser.UserId);
 
-                // HATA DÜZELTMESÝ: result.Success ile kontrol ediyoruz
                 if (result.Success)
                 {
-                    // Gelen Talepler listesini temizle ve doldur
                     IncomingRequests.Clear();
-                    // HATA DÜZELTMESÝ: Tuple içindeki 'Incoming' listesine eriþiyoruz
                     foreach (var request in result.Data.Incoming)
-                    {
                         IncomingRequests.Add(request);
-                    }
 
-                    // Giden Talepler listesini temizle ve doldur
                     OutgoingRequests.Clear();
-                    // HATA DÜZELTMESÝ: Tuple içindeki 'Outgoing' listesine eriþiyoruz
                     foreach (var request in result.Data.Outgoing)
-                    {
                         OutgoingRequests.Add(request);
-                    }
                 }
                 else
                 {
@@ -71,58 +88,84 @@ namespace KamPay.ViewModels
                 IsLoading = false;
             }
         }
-        // Kabul Etmek için yeni komut
+
+        // ðŸŸ¢ Kabul / Reddet iÅŸlemleri
         [RelayCommand]
-        private async Task AcceptRequestAsync(ServiceRequest request)
-        {
+        private async Task AcceptRequestAsync(ServiceRequest request) =>
             await HandleResponseAsync(request, true);
-        }
 
-        // Reddetmek için yeni komut
         [RelayCommand]
-        private async Task DeclineRequestAsync(ServiceRequest request)
-        {
+        private async Task DeclineRequestAsync(ServiceRequest request) =>
             await HandleResponseAsync(request, false);
-        }
 
-        // Ýki komutun da kullanacaðý ortak özel metot
         private async Task HandleResponseAsync(ServiceRequest request, bool accepted)
         {
-            if (request == null || request.Status != ServiceRequestStatus.Pending) return;
+            if (request == null || request.Status != ServiceRequestStatus.Pending)
+                return;
 
             var result = await _serviceService.RespondToRequestAsync(request.RequestId, accepted);
             if (result.Success)
-            {
-                // Listeyi yeniden yükleyerek arayüzü güncelle
                 await LoadRequestsAsync();
-            }
             else
-            {
                 await Shell.Current.DisplayAlert("Hata", result.Message, "Tamam");
-            }
         }
 
-        // --- DÜZELTME SONU ---
-
+        // ðŸ’° Tamamlama ve Ã¶deme simÃ¼lasyonu
         [RelayCommand]
         private async Task CompleteRequestAsync(ServiceRequest request)
         {
-            if (request == null || request.Status != ServiceRequestStatus.Accepted) return;
+            if (request == null || request.Status != ServiceRequestStatus.Accepted)
+                return;
 
-            var confirm = await Shell.Current.DisplayAlert("Onay", "Hizmeti aldýðýnýzý onaylýyor musunuz? Bu iþlem geri alýnamaz ve zaman kredisi transfer edilecektir.", "Evet, Onayla", "Hayýr");
+            // ðŸŸ¡ Hizmet fiyatÄ± kontrolÃ¼
+            decimal price = request.QuotedPrice ?? 0;
+            string priceInfo = price > 0 ? $"Bu hizmetin Ã¼creti {price} â‚º olarak kaydedilmiÅŸtir.\n\n" : "";
+
+            var confirm = await Shell.Current.DisplayAlert(
+                "Onay",
+                $"{priceInfo}Hizmeti aldÄ±ÄŸÄ±nÄ±zÄ± onaylÄ±yor musunuz? Bu iÅŸlem geri alÄ±namaz ve Ã¶deme simÃ¼lasyonu baÅŸlatÄ±lacaktÄ±r.",
+                "Evet, Onayla",
+                "HayÄ±r"
+            );
+
             if (!confirm) return;
 
             var currentUser = await _authService.GetCurrentUserAsync();
-            var result = await _serviceService.CompleteRequestAsync(request.RequestId, currentUser.UserId);
-
-            if (result.Success)
+            if (currentUser == null)
             {
-                await Shell.Current.DisplayAlert("Baþarýlý", "Hizmet tamamlandý ve kredi transfer edildi.", "Tamam");
-                await LoadRequestsAsync(); // Listeyi yenile
+                await Shell.Current.DisplayAlert("Hata", "Oturum bilgisi alÄ±namadÄ±.", "Tamam");
+                return;
             }
-            else
+
+            try
             {
-                await Shell.Current.DisplayAlert("Hata", result.Message, "Tamam");
+                // ðŸŸ¢ Ã–deme simÃ¼lasyonu baÅŸlat
+                var result = await _serviceService.SimulatePaymentAndCompleteAsync(
+                    request.RequestId,
+                    currentUser.UserId,
+                    SelectedPaymentMethod
+                );
+
+                if (result.Success)
+                {
+                    string message = SelectedPaymentMethod switch
+                    {
+                        PaymentMethodType.CardSim => $"Kart (SimÃ¼lasyon) ile {price} â‚º Ã¶deme baÅŸarÄ±yla gerÃ§ekleÅŸtirildi.",
+                        PaymentMethodType.BankTransferSim => $"EFT / Havale (SimÃ¼lasyon) ile {price} â‚º Ã¶deme baÅŸarÄ±yla tamamlandÄ±.",
+                        _ => "Ã–deme simÃ¼lasyonu baÅŸarÄ±yla tamamlandÄ±."
+                    };
+
+                    await Shell.Current.DisplayAlert("BaÅŸarÄ±lÄ±", message, "Tamam");
+                    await LoadRequestsAsync(); // Listeyi yenile
+                }
+                else
+                {
+                    await Shell.Current.DisplayAlert("Hata", result.Message, "Tamam");
+                }
+            }
+            catch (Exception ex)
+            {
+                await Shell.Current.DisplayAlert("Hata", ex.Message, "Tamam");
             }
         }
     }

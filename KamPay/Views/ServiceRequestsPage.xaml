@@ -54,14 +54,29 @@
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="models:ServiceRequest">
                                 <Frame Padding="10" Margin="0,5" BorderColor="Gainsboro">
+                                    
                                     <VerticalStackLayout Spacing="5">
                                         <Label Text="{Binding ServiceTitle}" FontAttributes="Bold"/>
                                         <Label Text="{Binding Status, StringFormat='Durum: {0}'}" />
 
-                                        <Button Text="Tamamlandı Olarak İşaretle" IsVisible="{Binding Status, Converter={StaticResource IsAcceptedConverter}}"
-                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=CompleteRequestCommand}" 
-                                                CommandParameter="{Binding .}" />
+                                        <!-- 🟢 Ödeme yöntemi seçimi alanı -->
+                                        <StackLayout Margin="0,5,0,0" Spacing="8"
+                 IsVisible="{Binding Status, Converter={StaticResource IsAcceptedConverter}}">
+                                            <Label Text="Ödeme Yöntemi Seçin:" FontAttributes="Bold" />
+                                            <Picker Title="Seçiniz"
+                ItemsSource="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=PaymentMethods}"
+                ItemDisplayBinding="{Binding DisplayName}"
+                SelectedIndexChanged="OnPaymentMethodSelected"/>
+                                        </StackLayout>
+
+                                        <!-- 🟢 Tamamla butonu (var olan kodun) -->
+                                        <Button Text="Tamamlandı Olarak İşaretle"
+            IsVisible="{Binding Status, Converter={StaticResource IsAcceptedConverter}}"
+            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=CompleteRequestCommand}" 
+            CommandParameter="{Binding .}" />
                                     </VerticalStackLayout>
+
+                                    
                                 </Frame>
                             </DataTemplate>
                         </CollectionView.ItemTemplate>

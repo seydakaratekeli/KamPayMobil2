@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+ï»¿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using KamPay.Models;
@@ -22,7 +22,7 @@ namespace KamPay.ViewModels
     [QueryProperty(nameof(ProductId), "ProductId")]
     public partial class ProductDetailViewModel : ObservableObject
     {
-        // Gerekli tüm servisleri tanımlıyoruz
+        // Gerekli tÃ¼m servisleri tanÄ±mlÄ±yoruz
         private readonly IProductService _productService;
         private readonly IAuthenticationService _authService;
         private readonly IFavoriteService _favoriteService;
@@ -108,13 +108,13 @@ namespace KamPay.ViewModels
                 }
                 else
                 {
-                    await Application.Current.MainPage.DisplayAlert("Hata", "Ürün bulunamadı", "Tamam");
+                    await Application.Current.MainPage.DisplayAlert("Hata", "ÃœrÃ¼n bulunamadÄ±", "Tamam");
                     await Shell.Current.GoToAsync("..");
                 }
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage.DisplayAlert("Hata", $"Ürün yüklenirken hata oluştu: {ex.Message}", "Tamam");
+                await Application.Current.MainPage.DisplayAlert("Hata", $"ÃœrÃ¼n yÃ¼klenirken hata oluÅŸtu: {ex.Message}", "Tamam");
             }
             finally
             {
@@ -146,7 +146,7 @@ namespace KamPay.ViewModels
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage.DisplayAlert("Hata", $"İletişim kurulamadı: {ex.Message}", "Tamam");
+                await Application.Current.MainPage.DisplayAlert("Hata", $"Ä°letiÅŸim kurulamadÄ±: {ex.Message}", "Tamam");
             }
             finally
             {
@@ -162,7 +162,7 @@ namespace KamPay.ViewModels
             var currentUser = await _authService.GetCurrentUserAsync();
             if (currentUser == null)
             {
-                await Application.Current.MainPage.DisplayAlert("Hata", "Bu işlem için giriş yapmalısınız.", "Tamam");
+                await Application.Current.MainPage.DisplayAlert("Hata", "Bu iÅŸlem iÃ§in giriÅŸ yapmalÄ±sÄ±nÄ±z.", "Tamam");
                 return;
             }
 
@@ -179,7 +179,7 @@ namespace KamPay.ViewModels
                     case ProductType.Satis:
                     case ProductType.Bagis:
                         var result = await _transactionService.CreateRequestAsync(Product, currentUser);
-                        await Application.Current.MainPage.DisplayAlert(result.Success ? "Başarılı" : "Hata", result.Message, "Tamam");
+                        await Application.Current.MainPage.DisplayAlert(result.Success ? "BaÅŸarÄ±lÄ±" : "Hata", result.Message, "Tamam");
                         break;
                 }
             }
@@ -192,6 +192,106 @@ namespace KamPay.ViewModels
                 IsLoading = false;
             }
         }
+        [RelayCommand]
+        private async Task SimulatePurchaseAsync()
+        {
+            if (Product == null)
+            {
+                await Shell.Current.DisplayAlert("Hata", "ÃœrÃ¼n bilgisi bulunamadÄ±.", "Tamam");
+                return;
+            }
+
+            // ğŸ”¹ Onay al
+            var confirm = await Shell.Current.DisplayAlert(
+                "SatÄ±n Al",
+                $"{Product.Title} adlÄ± Ã¼rÃ¼nÃ¼ {Product.Price} â‚º karÅŸÄ±lÄ±ÄŸÄ±nda satÄ±n almak istiyor musunuz?",
+                "Evet",
+                "HayÄ±r"
+            );
+
+            if (!confirm) return;
+
+            var currentUser = await _authService.GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                await Shell.Current.DisplayAlert("Hata", "GiriÅŸ yapÄ±lmamÄ±ÅŸ.", "Tamam");
+                return;
+            }
+
+            try
+            {
+                // 1ï¸âƒ£ Ã–deme simÃ¼lasyonunu baÅŸlat
+                var createResult = await _transactionService.CreatePaymentSimulationAsync(Product.ProductId, "CardSim");
+                if (!createResult.Success)
+                {
+                    await Shell.Current.DisplayAlert("Hata", createResult.Message, "Tamam");
+                    return;
+                }
+
+                var payment = createResult.Data;
+
+                // 2ï¸âƒ£ OTP doÄŸrulamasÄ± (kart Ã¶demesi iÃ§in)
+                if (payment.Method == PaymentMethodType.CardSim)
+                {
+                    var otp = await Shell.Current.DisplayPromptAsync(
+                        "OTP DoÄŸrulamasÄ±",
+                        "6 haneli OTP kodunu giriniz:",
+                        "Onayla",
+                        "Ä°ptal"
+                    );
+
+                    if (string.IsNullOrWhiteSpace(otp))
+                    {
+                        await Shell.Current.DisplayAlert("UyarÄ±", "OTP giriÅŸi iptal edildi.", "Tamam");
+                        return;
+                    }
+
+                    var confirmResult = await _transactionService.ConfirmPaymentSimulationAsync(Product.ProductId, payment.PaymentId, otp);
+                    if (!confirmResult.Success)
+                    {
+                        await Shell.Current.DisplayAlert("Hata", confirmResult.Message, "Tamam");
+                        return;
+                    }
+                }
+
+                // 3ï¸âƒ£ EFT simÃ¼lasyonu (doÄŸrudan onaylanÄ±r)
+                else if (payment.Method == PaymentMethodType.BankTransferSim)
+                {
+                    await Shell.Current.DisplayAlert(
+                        "Bilgi",
+                        $"LÃ¼tfen {payment.BankName} hesabÄ±na {payment.Amount} â‚º gÃ¶nderin.\nReferans No: {payment.BankReference}",
+                        "Tamam"
+                    );
+
+                    // Demo: EFT'nin onaylanmasÄ± birkaÃ§ saniye sÃ¼rebilir
+                    await Task.Delay(2000);
+                    var confirmResult = await _transactionService.ConfirmPaymentSimulationAsync(Product.ProductId, payment.PaymentId);
+                    if (!confirmResult.Success)
+                    {
+                        await Shell.Current.DisplayAlert("Hata", confirmResult.Message, "Tamam");
+                        return;
+                    }
+                }
+
+                // 4ï¸âƒ£ BaÅŸarÄ±lÄ± iÅŸlem sonrasÄ± bildirim
+                await Shell.Current.DisplayAlert(
+                    "BaÅŸarÄ±lÄ±",
+                    "Ã–deme baÅŸarÄ±yla tamamlandÄ± ve Ã¼rÃ¼n size ait!",
+                    "Tamam"
+                );
+
+                // 5ï¸âƒ£ ÃœrÃ¼nÃ¼ satÄ±ldÄ± olarak gÃ¼ncelle
+                await _productService.MarkAsSoldAsync(Product.ProductId);
+
+                // SayfayÄ± yenile
+                await LoadProductAsync();
+            }
+            catch (Exception ex)
+            {
+                await Shell.Current.DisplayAlert("Hata", $"Ã–deme simÃ¼lasyonu baÅŸarÄ±sÄ±z: {ex.Message}", "Tamam");
+            }
+        }
+
 
         [RelayCommand]
         private async Task ToggleFavoriteAsync()
@@ -243,12 +343,12 @@ namespace KamPay.ViewModels
                 await Share.RequestAsync(new ShareTextRequest
                 {
                     Title = Product.Title,
-                    Text = $"{Product.Title}\n{Product.Description}\n{Product.PriceText}\n\nKamPay ile paylaşıldı"
+                    Text = $"{Product.Title}\n{Product.Description}\n{Product.PriceText}\n\nKamPay ile paylaÅŸÄ±ldÄ±"
                 });
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage.DisplayAlert("Hata", $"Paylaşılamadı: {ex.Message}", "Tamam");
+                await Application.Current.MainPage.DisplayAlert("Hata", $"PaylaÅŸÄ±lamadÄ±: {ex.Message}", "Tamam");
             }
         }
 
@@ -259,9 +359,9 @@ namespace KamPay.ViewModels
 
             var confirm = await Application.Current.MainPage.DisplayAlert(
                 "Onay",
-                "Ürünü satıldı olarak işaretlemek istediğinize emin misiniz?",
+                "ÃœrÃ¼nÃ¼ satÄ±ldÄ± olarak iÅŸaretlemek istediÄŸinize emin misiniz?",
                 "Evet",
-                "Hayır"
+                "HayÄ±r"
             );
 
             if (!confirm) return;
@@ -275,8 +375,8 @@ namespace KamPay.ViewModels
                 if (result.Success)
                 {
                     await Application.Current.MainPage.DisplayAlert(
-                        "Başarılı",
-                        "Ürün satıldı olarak işaretlendi",
+                        "BaÅŸarÄ±lÄ±",
+                        "ÃœrÃ¼n satÄ±ldÄ± olarak iÅŸaretlendi",
                         "Tamam"
                     );
 
@@ -289,7 +389,7 @@ namespace KamPay.ViewModels
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage.DisplayAlert("Hata", $"İşlem başarısız: {ex.Message}", "Tamam");
+                await Application.Current.MainPage.DisplayAlert("Hata", $"Ä°ÅŸlem baÅŸarÄ±sÄ±z: {ex.Message}", "Tamam");
             }
             finally
             {
@@ -311,9 +411,9 @@ namespace KamPay.ViewModels
 
             var confirm = await Application.Current.MainPage.DisplayAlert(
                 "Onay",
-                "Ürünü silmek istediğinize emin misiniz? Bu işlem geri alınamaz.",
+                "ÃœrÃ¼nÃ¼ silmek istediÄŸinize emin misiniz? Bu iÅŸlem geri alÄ±namaz.",
                 "Evet, Sil",
-                "İptal"
+                "Ä°ptal"
             );
 
             if (!confirm) return;
@@ -326,7 +426,7 @@ namespace KamPay.ViewModels
 
                 if (result.Success)
                 {
-                    await Application.Current.MainPage.DisplayAlert("Başarılı", "Ürün silindi", "Tamam");
+                    await Application.Current.MainPage.DisplayAlert("BaÅŸarÄ±lÄ±", "ÃœrÃ¼n silindi", "Tamam");
                     await Shell.Current.GoToAsync("..");
                 }
                 else
@@ -336,7 +436,7 @@ namespace KamPay.ViewModels
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage.DisplayAlert("Hata", $"Silme başarısız: {ex.Message}", "Tamam");
+                await Application.Current.MainPage.DisplayAlert("Hata", $"Silme baÅŸarÄ±sÄ±z: {ex.Message}", "Tamam");
             }
             finally
             {
@@ -350,18 +450,18 @@ namespace KamPay.ViewModels
             if (Product == null) return;
 
             var reason = await Application.Current.MainPage.DisplayActionSheet(
-                "Şikayet Nedeni",
-                "İptal",
+                "Åikayet Nedeni",
+                "Ä°ptal",
                 null,
-                "Uygunsuz içerik",
-                "Sahte ürün",
-                "Yanıltıcı bilgi",
-                "Diğer"
+                "Uygunsuz iÃ§erik",
+                "Sahte Ã¼rÃ¼n",
+                "YanÄ±ltÄ±cÄ± bilgi",
+                "DiÄŸer"
             );
 
-            if (reason != null && reason != "İptal")
+            if (reason != null && reason != "Ä°ptal")
             {
-                await Application.Current.MainPage.DisplayAlert("Bilgi", "Şikayetiniz alındı. İnceleme süreci başlatıldı.", "Tamam");
+                await Application.Current.MainPage.DisplayAlert("Bilgi", "Åikayetiniz alÄ±ndÄ±. Ä°nceleme sÃ¼reci baÅŸlatÄ±ldÄ±.", "Tamam");
             }
         }
 
@@ -403,7 +503,7 @@ namespace KamPay.ViewModels
             }
             catch (Exception ex)
             {
-                await Application.Current.MainPage.DisplayAlert("Hata", $"Harita açılamadı: {ex.Message}", "Tamam");
+                await Application.Current.MainPage.DisplayAlert("Hata", $"Harita aÃ§Ä±lamadÄ±: {ex.Message}", "Tamam");
             }
         }
 

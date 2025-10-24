@@ -1,3 +1,6 @@
+using Newtonsoft.Json;
+
+
 namespace KamPay.Models;
 
 public class ServiceOffer
@@ -13,6 +16,8 @@ public class ServiceOffer
     public DateTime CreatedAt { get; set; }
     public bool IsAvailable { get; set; }
     public List<string> Tags { get; set; }
+    [JsonProperty("price")]
+    public decimal Price { get; set; } = 0;
 
     public ServiceOffer()
     {
@@ -45,6 +50,15 @@ public class ServiceRequest
     public string ProviderId { get; set; }   // Hizmeti sunan kiþi
     public string RequesterId { get; set; }  // Hizmeti talep eden kiþi
     public string RequesterName { get; set; }
+
+    public decimal Price { get; set; } = 0; // Hizmet fiyatý (örneðin 150 TL)
+    public string Currency { get; set; } = "TRY";
+
+    // ServiceRequest.cs içinde:
+    public ServicePaymentStatus PaymentStatus { get; set; } = ServicePaymentStatus.None;
+    public string? PaymentSimulationId { get; set; }
+    public PaymentMethodType? PaymentMethod { get; set; } = PaymentMethodType.None;
+    public decimal? QuotedPrice { get; set; }   // Kabul anýnda kilitlenmiþ fiyat (istersen)
 
     // --- YENÝ EKLENECEK PROPERTY ---
     public int TimeCreditValue { get; set; } // Ýþlemin yapýldýðý andaki kredi deðeri

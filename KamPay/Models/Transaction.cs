@@ -1,96 +1,106 @@
-using KamPay.Models;
+ï»¿using KamPay.Models;
 using System;
-using System.Text.Json.Serialization; // Bu using ifadesini ekleyin
+using System.Text.Json.Serialization;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace KamPay.Models
 {
-    // Bir teklifin veya isteğin tüm yaşam döngüsünü takip eden ana model
+    // ğŸ”¹ Bir Ã¼rÃ¼n satÄ±ÅŸÄ±, takasÄ± veya baÄŸÄ±ÅŸÄ± sÃ¼recini takip eden ana model
     public class Transaction
     {
         public string TransactionId { get; set; } = Guid.NewGuid().ToString();
 
-        // İlgili Ana Ürün Bilgileri
+        // ğŸ”¹ Ä°lgili Ana ÃœrÃ¼n Bilgileri
         public string ProductId { get; set; }
         public string ProductTitle { get; set; }
         public string ProductThumbnailUrl { get; set; }
-        public ProductType Type { get; set; } // Satış, Takas, Bağış
+        public ProductType Type { get; set; } // SatÄ±ÅŸ, Takas, BaÄŸÄ±ÅŸ
 
-        // Taraflar
-        public string SellerId { get; set; } // Ürünü sunan kişi
+        // ğŸ”¹ Taraflar
+        public string SellerId { get; set; } // ÃœrÃ¼nÃ¼ sunan kiÅŸi
         public string SellerName { get; set; }
-        public string BuyerId { get; set; }  // Teklifi yapan/isteği gönderen kişi
+        public string BuyerId { get; set; }  // Teklifi yapan/isteÄŸi gÃ¶nderen kiÅŸi
         public string BuyerName { get; set; }
 
-        public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending; // Varsayılan değer
+        // ğŸ”¹ Ã–deme Durumu
+        public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending;
 
-        // Durum ve Zaman Bilgileri
+        // ğŸ†• Yeni eklenen Ã¶deme bilgileri (simÃ¼lasyon desteÄŸi iÃ§in)
+        public PaymentMethodType PaymentMethod { get; set; } = PaymentMethodType.None; // CardSim, BankTransferSim vb.
+        public string? PaymentSimulationId { get; set; } // OTP ile eÅŸleÅŸecek ID
+        public decimal QuotedPrice { get; set; } // SatÄ±ÅŸ anÄ±ndaki kilitli fiyat
+        public string Currency { get; set; } = "TRY"; // Para birimi
+        public DateTime? PaymentCompletedAt { get; set; } // Ã–deme tamamlanma zamanÄ±
+
+        // ğŸ”¹ Durum ve Zaman Bilgileri
         public TransactionStatus Status { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        // YENİ: Bu liste, QR kodlarının durumunu takip etmek için kullanılacak.
-        [JsonIgnore] // Firebase'e bu alanı kaydetmemesi için ignore ediyoruz.
+        // ğŸ”¹ QR Kod Teslimat Takibi
+        [JsonIgnore]
         public List<DeliveryQRCode> DeliveryQRCodes { get; set; } = new();
 
+        // ğŸ”¹ GÃ¶rsel durum metni
         public string StatusText
         {
             get
             {
-                // Eğer tüm QR kodları kullanıldıysa, durumu "Tamamlandı" olarak göster.
                 if (Status == TransactionStatus.Accepted && DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed))
-                {
-                    return "Tamamlandı";
-                }
+                    return "TamamlandÄ±";
 
-                // Aksi takdirde mevcut enum durumunu kullan.
                 return Status switch
                 {
                     TransactionStatus.Pending => "Onay Bekliyor",
                     TransactionStatus.Accepted => "Kabul Edildi",
                     TransactionStatus.Rejected => "Reddedildi",
-                    TransactionStatus.Completed => "Tamamlandı",
-                    TransactionStatus.Cancelled => "İptal Edildi",
+                    TransactionStatus.Completed => "TamamlandÄ±",
+                    TransactionStatus.Cancelled => "Ä°ptal Edildi",
                     _ => "Bilinmiyor"
                 };
             }
         }
 
-        // MEVCUT HATALI SATIRI BUNUNLA DEĞİŞTİRİN:
-        public bool CanManageDelivery
-        {
-            get
-            {
-                // Düzeltilmiş Mantık:
-                // Buton sadece;
-                // 1. İşlem tipi "Takas" (ProductType.Takas) ise VE
-                // 2. Durumu "Kabul Edilmiş" (TransactionStatus.Accepted) ise VE
-                // 3. Teslimat tamamlanmamışsa (sizin mevcut QR kod mantığınızı kullanarak)
-                // görünmelidir.
-                return Type == ProductType.Takas &&
-                       Status == TransactionStatus.Accepted &&
-                       !(DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed));
-            }
-        }
-        public bool IsDeliveryCompleted => Status == TransactionStatus.Completed || (Status == TransactionStatus.Accepted && DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed));
-        // Takas'a özel alanlar
-        public string? OfferedProductId { get; set; } // Takas için teklif edilen ürünün ID'si
+        public bool CanManageDelivery =>
+            Type == ProductType.Takas &&
+            Status == TransactionStatus.Accepted &&
+            !(DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed));
+
+        public bool IsDeliveryCompleted =>
+            Status == TransactionStatus.Completed ||
+            (Status == TransactionStatus.Accepted && DeliveryQRCodes.Any() && DeliveryQRCodes.All(qr => qr.IsUsed));
+
+        // ğŸ”¹ Takas'a Ã¶zel alanlar
+        public string? OfferedProductId { get; set; }
         public string? OfferedProductTitle { get; set; }
-        public string? OfferMessage { get; set; } // Teklifle birlikte gönderilen mesaj
+        public string? OfferMessage { get; set; }
     }
 
+    // ğŸ”¸ Ä°ÅŸlem Durumu
     public enum TransactionStatus
     {
-        Pending,      // Teklif yapıldı, satıcının onayı bekliyor
-        Accepted,     // Teklif kabul edildi, teslimat süreci bekleniyor
+        Pending,      // Teklif yapÄ±ldÄ±, satÄ±cÄ±nÄ±n onayÄ± bekliyor
+        Accepted,     // Teklif kabul edildi, teslimat sÃ¼reci bekleniyor
         Rejected,     // Teklif reddedildi
-        Completed,    // Teslimat tamamlandı ve işlem kapandı
+        Completed,    // Teslimat tamamlandÄ± ve iÅŸlem kapandÄ±
         Cancelled     // Taraflardan biri iptal etti
     }
 
+    // ğŸ”¸ Ã–deme Durumu
     public enum PaymentStatus
     {
-        Pending, // Ödeme Bekleniyor
-        Paid,    // Ödendi (Simülasyon)
-        Failed   // Başarısız
+        Pending, // Ã–deme bekleniyor
+        Paid,    // Ã–dendi (simÃ¼lasyon)
+        Failed   // BaÅŸarÄ±sÄ±z
+    }
+
+    // ğŸ†• Yeni: Ã–deme TÃ¼rleri (CardSim, EFTSim vs.)
+    public enum PaymentMethodType
+    {
+        None,
+        CardSim,          // Kart ile Ã¶deme simÃ¼lasyonu
+        BankTransferSim,  // EFT / Havale simÃ¼lasyonu
+        WalletSim         // CÃ¼zdan / bakiye simÃ¼lasyonu (isteÄŸe baÄŸlÄ±)
     }
 }

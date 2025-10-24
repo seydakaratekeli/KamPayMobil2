@@ -18,6 +18,18 @@ namespace KamPay.Services
         private readonly IQRCodeService _qrCodeService;
         private readonly IUserProfileService _userProfileService; // Puan için eklendi
 
+
+        // Üst kýsýma ekle (FirebaseTransactionService sýnýfý içinde, constructor'dan önce)
+        internal class TempOtpModel
+        {
+            public string Otp { get; set; }
+            public DateTime ExpiresAt { get; set; }
+        }
+
+        private string GenerateOtp() => new Random().Next(100000, 999999).ToString();
+        private string GenerateBankReference() => $"BTX-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString().Substring(0, 6)}";
+
+
         public FirebaseTransactionService(
           INotificationService notificationService,
           IProductService productService,
@@ -84,6 +96,124 @@ namespace KamPay.Services
                 return ServiceResult<Transaction>.FailureResult("Ýþlem sýrasýnda hata oluþtu.", ex.Message);
             }
         }
+
+        public async Task<ServiceResult<PaymentDto>> CreatePaymentSimulationAsync(string transactionId, string method)
+        {
+            try
+            {
+                var transactionNode = _firebaseClient.Child(Constants.TransactionsCollection).Child(transactionId);
+                var transaction = await transactionNode.OnceSingleAsync<Transaction>();
+                if (transaction == null) return ServiceResult<PaymentDto>.FailureResult("Ýþlem bulunamadý.");
+
+                if (transaction.PaymentStatus != PaymentStatus.Pending)
+                    return ServiceResult<PaymentDto>.FailureResult("Bu iþlem için ödeme zaten baþlatýlmýþ.");
+
+                var amount = transaction.QuotedPrice > 0 ? transaction.QuotedPrice : 0m;
+
+                var payment = new PaymentDto
+                {
+                    Amount = amount,
+                    Currency = "TRY",
+                    Status = ServicePaymentStatus.Initiated,
+                    Method = method?.ToLower() switch
+                    {
+                        "cardsim" => PaymentMethodType.CardSim,
+                        "banktransfersim" or "eft" or "havale" => PaymentMethodType.BankTransferSim,
+                        _ => PaymentMethodType.CardSim
+                    }
+                };
+
+                // Kart ödemesi ise OTP oluþtur ve Firebase'e kaydet
+                if (payment.Method == PaymentMethodType.CardSim)
+                {
+                    var otp = GenerateOtp();
+                    await _firebaseClient
+                        .Child(Constants.TempOtpsCollection)
+                        .Child(payment.PaymentId)
+                        .PutAsync(new TempOtpModel
+                        {
+                            Otp = otp,
+                            ExpiresAt = DateTime.UtcNow.AddMinutes(2)
+                        });
+                }
+
+                // EFT ise banka referansý oluþtur
+                if (payment.Method == PaymentMethodType.BankTransferSim)
+                {
+                    payment.BankName = "Ziraat Bankasý";
+                    payment.BankReference = GenerateBankReference();
+                }
+
+                // Ýþlemi güncelle
+                transaction.PaymentMethod = payment.Method;
+                transaction.PaymentSimulationId = payment.PaymentId;
+                transaction.PaymentStatus = PaymentStatus.Pending;
+                await transactionNode.PutAsync(transaction);
+
+                return ServiceResult<PaymentDto>.SuccessResult(payment, "Ödeme simülasyonu baþlatýldý.");
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<PaymentDto>.FailureResult("Simülasyon baþlatýlýrken hata.", ex.Message);
+            }
+        }
+
+        public async Task<ServiceResult<bool>> ConfirmPaymentSimulationAsync(string transactionId, string paymentId, string? otp = null)
+        {
+            try
+            {
+                var transactionNode = _firebaseClient.Child(Constants.TransactionsCollection).Child(transactionId);
+                var transaction = await transactionNode.OnceSingleAsync<Transaction>();
+                if (transaction == null) return ServiceResult<bool>.FailureResult("Ýþlem bulunamadý.");
+
+                if (transaction.PaymentSimulationId != paymentId)
+                    return ServiceResult<bool>.FailureResult("Geçersiz ödeme kimliði.");
+
+                if (transaction.PaymentMethod == PaymentMethodType.CardSim)
+                {
+                    var otpNode = _firebaseClient.Child(Constants.TempOtpsCollection).Child(paymentId);
+                    var saved = await otpNode.OnceSingleAsync<TempOtpModel>();
+                    if (saved == null) return ServiceResult<bool>.FailureResult("OTP bulunamadý.");
+                    if (DateTime.UtcNow > saved.ExpiresAt)
+                        return ServiceResult<bool>.FailureResult("OTP süresi doldu.");
+                    if (string.IsNullOrWhiteSpace(otp) || saved.Otp != otp)
+                        return ServiceResult<bool>.FailureResult("OTP geçersiz.");
+                }
+
+                // Baþarýlý ödeme
+                transaction.PaymentStatus = PaymentStatus.Paid;
+                transaction.PaymentCompletedAt = DateTime.UtcNow;
+                transaction.Status = TransactionStatus.Completed;
+                await transactionNode.PutAsync(transaction);
+
+                // Bildirim gönder
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserId = transaction.SellerId,
+                    Title = "Ürün Satýldý!",
+                    Message = $"{transaction.BuyerName}, '{transaction.ProductTitle}' ürününün ödemesini tamamladý.",
+                    Type = NotificationType.ProductSold,
+                    ActionUrl = nameof(Views.OffersPage)
+                });
+
+                return ServiceResult<bool>.SuccessResult(true, "Ödeme onaylandý.");
+            }
+            catch (Exception ex)
+            {
+                return ServiceResult<bool>.FailureResult("Ödeme onayýnda hata.", ex.Message);
+            }
+        }
+        public async Task<ServiceResult<bool>> SimulatePaymentAndCompleteAsync(string transactionId)
+        {
+            var payment = await CreatePaymentSimulationAsync(transactionId, "CardSim");
+            if (!payment.Success) return ServiceResult<bool>.FailureResult(payment.Message);
+
+            await Task.Delay(1500); // Simülasyon gecikmesi
+            var confirm = await ConfirmPaymentSimulationAsync(transactionId, payment.Data.PaymentId, otp: payment.Data.Otp);
+            return confirm;
+        }
+
+
         // --- YENÝ METOT: CompletePaymentAsync ---
         public async Task<ServiceResult<Transaction>> CompletePaymentAsync(string transactionId, string buyerId)
         {

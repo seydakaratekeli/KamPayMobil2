@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System;
 using KamPay.Models;
 using KamPay.Services;
-using System.Collections.Generic; // Bu using ifadesini ekleyin
+using System.Collections.Generic;
 
 namespace KamPay.ViewModels
 {
@@ -30,6 +30,11 @@ namespace KamPay.ViewModels
         [ObservableProperty]
         private int timeCredits = 1;
 
+
+        // 🟢 YENİ EKLENDİ: Hizmet fiyatı (₺)
+        [ObservableProperty]
+        private decimal servicePrice;
+
         public ObservableCollection<ServiceOffer> Services { get; } = new();
 
         public List<ServiceCategory> Categories { get; } = Enum.GetValues(typeof(ServiceCategory)).Cast<ServiceCategory>().ToList();
@@ -48,15 +53,13 @@ namespace KamPay.ViewModels
             try
             {
                 IsLoading = true;
-                Services.Clear(); // Koleksiyonu temizle
+                Services.Clear();
                 var result = await _serviceService.GetServiceOffersAsync();
 
                 if (result.Success && result.Data != null)
                 {
                     foreach (var service in result.Data)
-                    {
                         Services.Add(service);
-                    }
                 }
             }
             catch (Exception ex)
@@ -72,12 +75,18 @@ namespace KamPay.ViewModels
         [RelayCommand]
         private async Task CreateServiceAsync()
         {
-            // ... Bu metot aynı kalacak ...
             try
             {
+                // 🟡 Giriş doğrulama
                 if (string.IsNullOrWhiteSpace(ServiceTitle) || string.IsNullOrWhiteSpace(ServiceDescription))
                 {
-                    await Application.Current.MainPage.DisplayAlert("Uyarı", "Başlık ve açıklama gerekli", "Tamam");
+                    await Application.Current.MainPage.DisplayAlert("Uyarı", "Başlık ve açıklama gerekli.", "Tamam");
+                    return;
+                }
+
+                if (ServicePrice <= 0)
+                {
+                    await Application.Current.MainPage.DisplayAlert("Uyarı", "Lütfen geçerli bir fiyat giriniz.", "Tamam");
                     return;
                 }
 
@@ -86,10 +95,11 @@ namespace KamPay.ViewModels
                 var currentUser = await _authService.GetCurrentUserAsync();
                 if (currentUser == null)
                 {
-                    await Application.Current.MainPage.DisplayAlert("Hata", "Giriş yapılmamış", "Tamam");
+                    await Application.Current.MainPage.DisplayAlert("Hata", "Giriş yapılmamış.", "Tamam");
                     return;
                 }
 
+                // 🟢 Yeni hizmet oluşturuluyor (fiyat dahil)
                 var service = new ServiceOffer
                 {
                     ProviderId = currentUser.UserId,
@@ -97,7 +107,9 @@ namespace KamPay.ViewModels
                     Category = SelectedCategory,
                     Title = ServiceTitle,
                     Description = ServiceDescription,
-                    TimeCredits = TimeCredits
+                    TimeCredits = TimeCredits,
+                    Price = ServicePrice,
+                    CreatedAt = DateTime.UtcNow
                 };
 
                 var result = await _serviceService.CreateServiceOfferAsync(service);
@@ -105,14 +117,18 @@ namespace KamPay.ViewModels
                 if (result.Success && result.Data != null)
                 {
                     Services.Insert(0, result.Data);
+
+                    // Formu sıfırla
                     ServiceTitle = string.Empty;
                     ServiceDescription = string.Empty;
+                    ServicePrice = 0;
+                    TimeCredits = 1;
 
                     await Application.Current.MainPage.DisplayAlert("Başarılı", "Hizmet paylaşıldı!", "Tamam");
                 }
                 else if (!result.Success)
                 {
-                    await Application.Current.MainPage.DisplayAlert("Hata", result.Message ?? "Bir hata oluştu", "Tamam");
+                    await Application.Current.MainPage.DisplayAlert("Hata", result.Message ?? "Bir hata oluştu.", "Tamam");
                 }
             }
             catch (Exception ex)
@@ -125,7 +141,7 @@ namespace KamPay.ViewModels
             }
         }
 
-        // --- YENİ EKLENEN KOMUT ---
+        // --- HİZMET TALEP KOMUTU ---
         [RelayCommand]
         private async Task RequestServiceAsync(ServiceOffer offer)
         {
@@ -138,7 +154,7 @@ namespace KamPay.ViewModels
                 return;
             }
 
-            // Kullanıcının kendi hizmetini talep etmesini engelle
+            // 🟡 Kullanıcının kendi hizmetini talep etmesini engelle
             if (offer.ProviderId == currentUser.UserId)
             {
                 await Application.Current.MainPage.DisplayAlert("Bilgi", "Kendi hizmetinizi talep edemezsiniz.", "Tamam");
@@ -149,13 +165,13 @@ namespace KamPay.ViewModels
             {
                 var message = await Application.Current.MainPage.DisplayPromptAsync(
                     "Hizmet Talebi",
-                    $"'{offer.Title}' hizmeti için talebinizi iletin:",
+                    $"'{offer.Title}' hizmeti için talebinizi iletin (Fiyat: {offer.Price} ₺):",
                     "Gönder",
                     "İptal",
                     "Merhaba, bu hizmetinizden yararlanmak istiyorum."
                 );
 
-                if (string.IsNullOrWhiteSpace(message)) return; // Kullanıcı iptal etti veya boş mesaj gönderdi
+                if (string.IsNullOrWhiteSpace(message)) return;
 
                 IsLoading = true;
 
@@ -163,11 +179,7 @@ namespace KamPay.ViewModels
 
                 if (result.Success)
                 {
-                    await Application.Current.MainPage.DisplayAlert(
-                        "Başarılı",
-                        result.Message,
-                        "Tamam"
-                    );
+                    await Application.Current.MainPage.DisplayAlert("Başarılı", result.Message, "Tamam");
                 }
                 else
                 {

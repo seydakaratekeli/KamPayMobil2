@@ -60,6 +60,12 @@ namespace KamPay.Models
         public DateTime? UpdatedAt { get; set; }
         public DateTime? SoldAt { get; set; }
 
+        // 🟢 Yeni alanlar (ödeme simülasyonu için)
+        public ServicePaymentStatus PaymentStatus { get; set; } = ServicePaymentStatus.None;
+        public PaymentMethodType PaymentMethod { get; set; } = PaymentMethodType.None;
+        public string BuyerId { get; set; }
+      //  public bool IsSold { get; set; } = false;
+
         /// <summary>
         /// Ürünün durumunu belirler (Satış mı, Takas mı?)
         /// </summary>
