@@ -18,6 +18,7 @@
             <converters:IntToBoolConverter x:Key="IntToBoolConverter" />
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter" />
             <converters:SimulatePaymentButtonVisibilityConverter x:Key="SimulatePaymentButtonVisibilityConverter" />
+            <converters:FirstCharConverter x:Key="FirstCharConverter" />
 
             <converters:ConfirmDonationButtonVisibilityConverter x:Key="ConfirmDonationButtonVisibilityConverter" />
             <converters:ProductTypeToBadgeColorConverter x:Key="ProductTypeToBadgeColorConverter" />

@@ -45,6 +45,8 @@ namespace KamPay.ViewModels
         [ObservableProperty] private ProductSortOption selectedSortOption;
         [ObservableProperty] private bool showFilterPanel;
         [ObservableProperty] private string emptyMessage = "Henüz ürün eklenmemiþ";
+        [ObservableProperty] private bool _isRefreshing;
+
         #endregion
 
         public List<ProductSortOption> SortOptions { get; } = Enum.GetValues(typeof(ProductSortOption)).Cast<ProductSortOption>().ToList();
@@ -277,6 +279,33 @@ namespace KamPay.ViewModels
         {
             if (HasUnreadNotifications) HasUnreadNotifications = false;
             await Shell.Current.GoToAsync(nameof(NotificationsPage));
+        }
+
+        [RelayCommand]
+        private async Task RefreshProductsAsync()
+        {
+            try
+            {
+                IsLoading = true;
+
+                // Firebase dinleyicisini sýfýrla (mevcut abonelikleri kapat)
+                _productSubscription?.Dispose();
+
+                // Yeniden dinlemeye baþla (mevcut metodunu çaðýrýyoruz)
+                StartListeningForProducts();
+
+                // Kategorileri de güncelle (isteðe baðlý)
+                await LoadCategoriesAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[RefreshProductsAsync] Hata: {ex.Message}");
+            }
+            finally
+            {
+                IsLoading = false;
+                IsRefreshing = false; // RefreshView için eklemen gerekecek
+            }
         }
 
         [RelayCommand]

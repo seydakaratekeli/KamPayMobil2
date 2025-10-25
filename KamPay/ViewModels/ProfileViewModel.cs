@@ -26,7 +26,6 @@ public partial class ProfileViewModel : ObservableObject
     [ObservableProperty]
     private bool isRefreshing;
 
-    // ✅ YENİ EKLEME: Profil fotoğrafı kontrolü için
     [ObservableProperty]
     private bool hasProfileImage;
 
@@ -43,7 +42,7 @@ public partial class ProfileViewModel : ObservableObject
         _profileService = profileService;
         _storageService = storageService;
 
-        LoadProfileAsync();
+        _ = LoadProfileAsync();
     }
 
     [RelayCommand]
@@ -56,35 +55,36 @@ public partial class ProfileViewModel : ObservableObject
             CurrentUser = await _authService.GetCurrentUserAsync();
             if (CurrentUser == null) return;
 
-            // ✅ DÜZELTİLDİ: user_profiles'tan profil bilgilerini çek ve CurrentUser'a senkronize et
-            var profileResult = await _profileService.GetUserProfileAsync(CurrentUser.UserId);
+            // 🔥 PARALEL YÜKLEME: 4 işlemi aynı anda başlat
+            var profileTask = _profileService.GetUserProfileAsync(CurrentUser.UserId);
+            var statsTask = _profileService.GetUserStatsAsync(CurrentUser.UserId);
+            var productsTask = _productService.GetUserProductsAsync(CurrentUser.UserId);
+            var badgesTask = _profileService.GetUserBadgesAsync(CurrentUser.UserId);
+
+            // Tüm işlemleri paralel bekle
+            await Task.WhenAll(profileTask, statsTask, productsTask, badgesTask);
+
+            // Sonuçları al
+            var profileResult = await profileTask;
+            var statsResult = await statsTask;
+            var productsResult = await productsTask;
+            var badgesResult = await badgesTask;
+
+            // Profil bilgilerini güncelle
             if (profileResult.Success)
             {
                 var userProfile = profileResult.Data;
-
-                // User nesnesini UserProfile'dan güncelle
                 CurrentUser.FirstName = userProfile.FirstName;
                 CurrentUser.LastName = userProfile.LastName;
                 CurrentUser.ProfileImageUrl = userProfile.ProfileImageUrl;
                 CurrentUser.Email = userProfile.Email;
-
-                // Profil fotoğrafı kontrolü
                 HasProfileImage = !string.IsNullOrWhiteSpace(userProfile.ProfileImageUrl);
             }
 
-            // İstatistikleri Yükle
-            var statsResult = await _profileService.GetUserStatsAsync(CurrentUser.UserId);
-            if (statsResult.Success)
-            {
-                UserStats = statsResult.Data;
-            }
-            else
-            {
-                UserStats = new UserStats();
-            }
+            // İstatistikler
+            UserStats = statsResult.Success ? statsResult.Data : new UserStats();
 
-            // Ürünleri Yükle
-            var productsResult = await _productService.GetUserProductsAsync(CurrentUser.UserId);
+            // Ürünler
             if (productsResult.Success && productsResult.Data != null)
             {
                 MyProducts.Clear();
@@ -98,8 +98,7 @@ public partial class ProfileViewModel : ObservableObject
                 }
             }
 
-            // Rozetleri Yükle
-            var badgesResult = await _profileService.GetUserBadgesAsync(CurrentUser.UserId);
+            // Rozetler
             if (badgesResult.Success && badgesResult.Data != null)
             {
                 MyBadges.Clear();
@@ -136,7 +135,6 @@ public partial class ProfileViewModel : ObservableObject
             return;
         }
 
-        // 1. Kullanıcıdan yeni isim bilgilerini alalım
         string newFirstName = await Application.Current.MainPage.DisplayPromptAsync(
             "Profil Güncelle",
             "Yeni adınızı girin:",
@@ -153,13 +151,11 @@ public partial class ProfileViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(newLastName))
             return;
 
-        // 2. Kullanıcıdan yeni kullanıcı adını al
         string newUsername = await Application.Current.MainPage.DisplayPromptAsync(
             "Profil Güncelle",
             "Yeni kullanıcı adınızı girin:",
             initialValue: CurrentUser.FirstName + CurrentUser.LastName);
 
-        // 3. İsteğe bağlı: Yeni profil fotoğrafı seçimi
         string uploadedImageUrl = null;
         bool changePhoto = await Application.Current.MainPage.DisplayAlert(
             "Profil Fotoğrafı",
@@ -199,7 +195,6 @@ public partial class ProfileViewModel : ObservableObject
 
         try
         {
-            // 4. ✅ DÜZELTİLDİ: user_profiles'ı güncelle
             var result = await _profileService.UpdateUserProfileAsync(
                 CurrentUser.UserId,
                 firstName: newFirstName,
@@ -210,7 +205,6 @@ public partial class ProfileViewModel : ObservableObject
 
             if (result.Success)
             {
-                // 5. ✅ DÜZELTİLDİ: Local CurrentUser'ı HEMEN güncelle
                 CurrentUser.FirstName = newFirstName;
                 CurrentUser.LastName = newLastName;
 
@@ -220,12 +214,9 @@ public partial class ProfileViewModel : ObservableObject
                     HasProfileImage = true;
                 }
 
-                // 6. ✅ KRİTİK: OnPropertyChanged ile UI'ı güncelle
                 OnPropertyChanged(nameof(CurrentUser));
 
                 await Application.Current.MainPage.DisplayAlert("Başarılı", "Profil güncellendi!", "Tamam");
-
-                // 7. ✅ Profili yeniden yükle (senkronizasyon için)
                 await LoadProfileAsync();
             }
             else

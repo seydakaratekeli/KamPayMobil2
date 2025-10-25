@@ -28,6 +28,7 @@ namespace KamPay.ViewModels
         private readonly IFavoriteService _favoriteService;
         private readonly IMessagingService _messagingService;
         private readonly ITransactionService _transactionService;
+        private string _lastLoadedProductId;
 
         [ObservableProperty]
         private string productId;
@@ -68,8 +69,9 @@ namespace KamPay.ViewModels
 
         partial void OnProductIdChanged(string value)
         {
-            if (!string.IsNullOrEmpty(value))
+            if (!string.IsNullOrEmpty(value) && value != _lastLoadedProductId)
             {
+                _lastLoadedProductId = value;
                 _ = LoadProductAsync();
             }
         }

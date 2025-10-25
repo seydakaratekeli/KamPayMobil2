@@ -31,5 +31,15 @@ namespace KamPay
                 }
             };
         }
+
+        protected override void OnSleep()
+        {
+            base.OnSleep();
+
+            // Cache'leri temizle
+            ChatViewModel.ClearOldCache(maxAgeMinutes: 30);
+        }
+
+
     }
 }
