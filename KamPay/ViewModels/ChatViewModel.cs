@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -21,9 +22,14 @@ namespace KamPay.ViewModels
         private readonly IMessagingService _messagingService;
         private readonly IAuthenticationService _authService;
         private readonly FirebaseClient _firebaseClient = new(Constants.FirebaseRealtimeDbUrl);
+
+        // 🔥 CACHE: Her konuşma için ayrı state
+        private static readonly Dictionary<string, ConversationState> _conversationCache = new();
+
         private IDisposable _messagesSubscription;
         private bool _isListenerActive = false;
         private string _activeConversationId;
+        private bool _initialLoadComplete = false;
 
         [ObservableProperty]
         private string conversationId;
@@ -46,6 +52,9 @@ namespace KamPay.ViewModels
         [ObservableProperty]
         private bool isSending;
 
+        [ObservableProperty]
+        private bool isRefreshing; // 🆕 Pull-to-refresh
+
         public ObservableCollection<Message> Messages { get; } = new();
 
         private User _currentUser;
@@ -58,7 +67,7 @@ namespace KamPay.ViewModels
 
         partial void OnConversationIdChanged(string value)
         {
-            if (!string.IsNullOrEmpty(value) && value != _activeConversationId)
+            if (!string.IsNullOrEmpty(value))
             {
                 _ = LoadChatAsync();
             }
@@ -67,12 +76,22 @@ namespace KamPay.ViewModels
         [RelayCommand]
         private async Task LoadChatAsync()
         {
-            // 🔥 KONTROL: Aynı konuşma için tekrar yükleme yapma
-            if (_isListenerActive && ConversationId == _activeConversationId)
+            // 🔥 CACHE: Aynı konuşma için tekrar yükleme yapma
+            if (_activeConversationId == ConversationId && _initialLoadComplete)
             {
-                Console.WriteLine("⚡ Listener zaten aktif, sadece okundu işaretleniyor.");
-                await _messagingService.MarkMessagesAsReadAsync(ConversationId, _currentUser?.UserId);
-                IsLoading = false;
+                Console.WriteLine($"⚡ Cache'den yükleniyor: {ConversationId}");
+
+                // Cache'den mesajları geri yükle
+                if (_conversationCache.TryGetValue(ConversationId, out var cachedState))
+                {
+                    RestoreFromCache(cachedState);
+                }
+
+                // Sadece okundu işaretle
+                if (_currentUser != null)
+                {
+                    await _messagingService.MarkMessagesAsReadAsync(ConversationId, _currentUser.UserId);
+                }
                 return;
             }
 
@@ -80,16 +99,16 @@ namespace KamPay.ViewModels
             {
                 IsLoading = true;
 
-                // Eski konuşmadan geliyorsak mesajları temizle
-                if (_activeConversationId != null && _activeConversationId != ConversationId)
+                // 🔥 Eski konuşmadan geliyorsak kaydet
+                if (_activeConversationId != null &&
+                    _activeConversationId != ConversationId &&
+                    _initialLoadComplete)
                 {
-                    Messages.Clear();
-                    _messagesSubscription?.Dispose();
-                    _messagesSubscription = null;
-                    _isListenerActive = false;
+                    SaveToCache(_activeConversationId);
+                    CleanupCurrentConversation();
                 }
 
-                // Kullanıcı bilgisini al (sadece ilk kez)
+                // Kullanıcı bilgisi (singleton pattern)
                 if (_currentUser == null)
                 {
                     _currentUser = await _authService.GetCurrentUserAsync();
@@ -101,7 +120,24 @@ namespace KamPay.ViewModels
                     }
                 }
 
-                // Konuşma bilgilerini al (sadece ilk kez veya değiştiyse)
+                // 🔥 CACHE: Cache'de varsa oradan yükle
+                if (_conversationCache.TryGetValue(ConversationId, out var cachedState))
+                {
+                    Console.WriteLine($"📦 Cache'den yüklendi: {ConversationId}");
+                    RestoreFromCache(cachedState);
+                    _activeConversationId = ConversationId;
+                    _initialLoadComplete = true;
+                    IsLoading = false;
+
+                    // Okundu işaretle
+                    await _messagingService.MarkMessagesAsReadAsync(ConversationId, _currentUser.UserId);
+                    return;
+                }
+
+                // 🔥 İlk kez yükleniyor
+                Console.WriteLine($"🔥 İlk yükleme: {ConversationId}");
+
+                // Konuşma bilgileri
                 if (Conversation == null || Conversation.ConversationId != ConversationId)
                 {
                     var conversations = await _messagingService.GetUserConversationsAsync(_currentUser.UserId);
@@ -114,42 +150,108 @@ namespace KamPay.ViewModels
                     }
                 }
 
-                // 🔥 İLK YÜKLEME: Mevcut mesajları hızlıca çek (listener başlamadan önce)
-                if (Messages.Count == 0)
-                {
-                    var messagesResult = await _messagingService.GetConversationMessagesAsync(ConversationId, 50);
-                    if (messagesResult.Success && messagesResult.Data != null)
-                    {
-                        foreach (var msg in messagesResult.Data)
-                        {
-                            msg.IsSentByMe = msg.SenderId == _currentUser.UserId;
-                            Messages.Add(msg);
-                        }
-                    }
-
-                    // 🔥 İlk mesajlar yüklendikten HEMEN SONRA loading'i kapat
-                    IsLoading = false;
-                }
-
-                // 🔥 Real-time listener'ı başlat (yeni mesajlar için)
+                // Listener başlat
                 StartListeningToMessages();
                 _activeConversationId = ConversationId;
 
-                // Mesajları okundu işaretle
+                // Okundu işaretle
                 await _messagingService.MarkMessagesAsReadAsync(ConversationId, _currentUser.UserId);
             }
             catch (Exception ex)
             {
                 await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
                 Console.WriteLine($"❌ LoadChatAsync hatası: {ex.Message}");
-            }
-            finally
-            {
                 IsLoading = false;
             }
         }
 
-        // 🔥 OPTIMIZE EDİLDİ: Listener sadece bir kez başlatılıyor
+        // 🆕 CACHE: Durumu kaydet
+        private void SaveToCache(string conversationId)
+        {
+            if (string.IsNullOrEmpty(conversationId)) return;
+
+            var state = new ConversationState
+            {
+                Messages = Messages.ToList(),
+                Conversation = Conversation,
+                OtherUserName = OtherUserName,
+                OtherUserPhoto = OtherUserPhoto,
+                CachedAt = DateTime.UtcNow
+            };
+
+            _conversationCache[conversationId] = state;
+            Console.WriteLine($"💾 Cache'e kaydedildi: {conversationId} ({state.Messages.Count} mesaj)");
+        }
+
+        // 🆕 CACHE: Durumu geri yükle
+        private void RestoreFromCache(ConversationState state)
+        {
+            // Eski cache mi? (5 dakikadan eski)
+            if ((DateTime.UtcNow - state.CachedAt).TotalMinutes > 5)
+            {
+                Console.WriteLine("⚠️ Cache eski, yeniden yükleniyor...");
+                _conversationCache.Remove(ConversationId);
+                _ = Task.Run(() => LoadChatAsync());
+                return;
+            }
+
+            Messages.Clear();
+            foreach (var msg in state.Messages)
+            {
+                Messages.Add(msg);
+            }
+
+            Conversation = state.Conversation;
+            OtherUserName = state.OtherUserName;
+            OtherUserPhoto = state.OtherUserPhoto;
+
+            // Listener'ı yeniden başlat
+            StartListeningToMessages();
+
+            Console.WriteLine($"✅ Cache'den geri yüklendi: {Messages.Count} mesaj");
+        }
+
+        // 🆕 CACHE: Mevcut konuşmayı temizle
+        private void CleanupCurrentConversation()
+        {
+            _messagesSubscription?.Dispose();
+            _messagesSubscription = null;
+            _isListenerActive = false;
+            _initialLoadComplete = false;
+        }
+
+        // 🆕 Pull-to-Refresh
+        [RelayCommand]
+        private async Task RefreshMessagesAsync()
+        {
+            if (IsRefreshing) return;
+
+            try
+            {
+                IsRefreshing = true;
+
+                // Cache'i temizle
+                _conversationCache.Remove(ConversationId);
+
+                // Listener'ı yeniden başlat
+                CleanupCurrentConversation();
+                Messages.Clear();
+
+                _initialLoadComplete = false;
+                StartListeningToMessages();
+
+                await Task.Delay(500); // UI için kısa gecikme
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Refresh hatası: {ex.Message}");
+            }
+            finally
+            {
+                IsRefreshing = false;
+            }
+        }
+
         private void StartListeningToMessages()
         {
             if (_isListenerActive)
@@ -165,100 +267,142 @@ namespace KamPay.ViewModels
                 .Child(ConversationId)
                 .AsObservable<Message>()
                 .Where(e => e.Object != null && !e.Object.IsDeleted)
+                .Buffer(TimeSpan.FromMilliseconds(200))
+                .Where(batch => batch.Any())
                 .Subscribe(
-                    e =>
+                    events =>
                     {
                         MainThread.BeginInvokeOnMainThread(() =>
                         {
                             try
                             {
-                                var message = e.Object;
-                                message.MessageId = e.Key;
-                                message.IsSentByMe = message.SenderId == _currentUser.UserId;
-
-                                var existingMessage = Messages.FirstOrDefault(m => m.MessageId == message.MessageId);
-
-                                if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
-                                {
-                                    if (existingMessage != null)
-                                    {
-                                        // Mesaj güncellendi - mevcut pozisyonunu koru
-                                        var index = Messages.IndexOf(existingMessage);
-                                        Messages[index] = message;
-                                    }
-                                    else
-                                    {
-                                        // 🔥 YENİ MESAJ: Doğru pozisyona ekle (zaman sırasına göre)
-                                        InsertMessageInOrder(message);
-
-                                        // Eğer mesaj başkası tarafından gönderildiyse okundu işaretle
-                                        if (!message.IsSentByMe)
-                                        {
-                                            _ = _messagingService.MarkMessagesAsReadAsync(ConversationId, _currentUser.UserId);
-                                        }
-
-                                        // Son mesaja kaydır (sadece yeni mesajsa)
-                                        WeakReferenceMessenger.Default.Send(new ScrollToChatMessage(message));
-                                    }
-                                }
-                                else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
-                                {
-                                    if (existingMessage != null)
-                                    {
-                                        Messages.Remove(existingMessage);
-                                    }
-                                }
-
-                                // İlk yükleme tamamlandığında loading'i kapat
-                                IsLoading = false;
+                                ProcessMessageBatch(events);
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"❌ Message update hatası: {ex.Message}");
+                                Console.WriteLine($"❌ Message batch hatası: {ex.Message}");
+                            }
+                            finally
+                            {
+                                if (!_initialLoadComplete)
+                                {
+                                    _initialLoadComplete = true;
+                                    IsLoading = false;
+
+                                    // İlk yükleme sonrası scroll
+                                    WeakReferenceMessenger.Default.Send(new ScrollToChatMessage(null));
+                                }
                             }
                         });
                     },
                     error =>
                     {
                         Console.WriteLine($"❌ Firebase message listener hatası: {error.Message}");
-                        MainThread.BeginInvokeOnMainThread(() =>
-                        {
-                            IsLoading = false;
-                        });
+                        MainThread.BeginInvokeOnMainThread(() => IsLoading = false);
                     });
 
             _isListenerActive = true;
         }
 
-        // 🔥 YENİ: Mesajı zaman sırasına göre doğru pozisyona ekle
-        private void InsertMessageInOrder(Message newMessage)
+        private void ProcessMessageBatch(IList<Firebase.Database.Streaming.FirebaseEvent<Message>> events)
         {
-            // Geçici mesaj varsa önce onu kaldır
-            var tempMessage = Messages.FirstOrDefault(m => m.MessageId.StartsWith("temp_"));
-            if (tempMessage != null && tempMessage.Content == newMessage.Content)
+            bool shouldScroll = false;
+            Message lastNewMessage = null;
+
+            foreach (var e in events)
+            {
+                var message = e.Object;
+                message.MessageId = e.Key;
+                message.IsSentByMe = message.SenderId == _currentUser.UserId;
+
+                var existingMessage = Messages.FirstOrDefault(m => m.MessageId == message.MessageId);
+
+                if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
+                {
+                    if (existingMessage != null)
+                    {
+                        var index = Messages.IndexOf(existingMessage);
+                        Messages[index] = message;
+                    }
+                    else
+                    {
+                        InsertMessageSorted(message);
+
+                        if (!message.IsSentByMe)
+                        {
+                            _ = _messagingService.MarkMessagesAsReadAsync(ConversationId, _currentUser.UserId);
+                        }
+
+                        shouldScroll = true;
+                        lastNewMessage = message;
+                    }
+                }
+                else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
+                {
+                    if (existingMessage != null)
+                    {
+                        Messages.Remove(existingMessage);
+                    }
+                }
+            }
+
+            if (shouldScroll && lastNewMessage != null && _initialLoadComplete)
+            {
+                WeakReferenceMessenger.Default.Send(new ScrollToChatMessage(lastNewMessage));
+            }
+        }
+
+        private void InsertMessageSorted(Message newMessage)
+        {
+            var tempMessage = Messages.FirstOrDefault(m => m.MessageId.StartsWith("temp_") &&
+                                                            m.Content == newMessage.Content &&
+                                                            Math.Abs((m.SentAt - newMessage.SentAt).TotalSeconds) < 10);
+            if (tempMessage != null)
             {
                 Messages.Remove(tempMessage);
             }
 
-            // Liste boşsa veya son mesaj yeniden eskiyse direkt ekle
-            if (Messages.Count == 0 || Messages.Last().SentAt <= newMessage.SentAt)
+            if (Messages.Count == 0)
             {
                 Messages.Add(newMessage);
                 return;
             }
 
-            // Doğru pozisyonu bul ve ekle (binary search benzeri)
-            for (int i = Messages.Count - 1; i >= 0; i--)
+            if (Messages[Messages.Count - 1].SentAt <= newMessage.SentAt)
             {
-                if (Messages[i].SentAt <= newMessage.SentAt)
+                Messages.Add(newMessage);
+                return;
+            }
+
+            if (Messages[0].SentAt >= newMessage.SentAt)
+            {
+                Messages.Insert(0, newMessage);
+                return;
+            }
+
+            int left = 0;
+            int right = Messages.Count - 1;
+
+            while (left <= right)
+            {
+                int mid = (left + right) / 2;
+
+                if (Messages[mid].SentAt == newMessage.SentAt)
                 {
-                    Messages.Insert(i + 1, newMessage);
+                    Messages.Insert(mid + 1, newMessage);
                     return;
+                }
+                else if (Messages[mid].SentAt < newMessage.SentAt)
+                {
+                    left = mid + 1;
+                }
+                else
+                {
+                    right = mid - 1;
                 }
             }
 
-            // En eski mesajsa en başa ekle
-            Messages.Insert(0, newMessage);
+            Messages.Insert(left, newMessage);
         }
 
         [RelayCommand]
@@ -269,13 +413,12 @@ namespace KamPay.ViewModels
                 return;
             }
 
-            var messageContent = MessageText;
+            var messageContent = MessageText.Trim();
             MessageText = string.Empty;
 
-            // 🔥 OPTIMISTIC UPDATE: Mesajı ANINDA UI'a ekle
             var tempMessage = new Message
             {
-                MessageId = $"temp_{Guid.NewGuid()}", // Geçici ID (prefix ile ayırt ediyoruz)
+                MessageId = $"temp_{Guid.NewGuid()}",
                 ConversationId = ConversationId,
                 SenderId = _currentUser.UserId,
                 SenderName = _currentUser.FullName,
@@ -283,19 +426,18 @@ namespace KamPay.ViewModels
                 ReceiverId = Conversation.GetOtherUserId(_currentUser.UserId),
                 ReceiverName = Conversation.GetOtherUserName(_currentUser.UserId),
                 ReceiverPhotoUrl = Conversation.GetOtherUserPhotoUrl(_currentUser.UserId),
-                Content = messageContent.Trim(),
+                Content = messageContent,
                 Type = MessageType.Text,
                 ProductId = Conversation.ProductId,
                 ProductTitle = Conversation.ProductTitle,
                 ProductThumbnail = Conversation.ProductThumbnail,
                 IsSentByMe = true,
                 SentAt = DateTime.UtcNow,
-                IsDelivered = false, // 🔹 Henüz Firebase'e gönderilmedi
+                IsDelivered = false,
                 IsRead = false
             };
 
-            // UI'a anında ekle
-            Messages.Add(tempMessage);
+            InsertMessageSorted(tempMessage);
             WeakReferenceMessenger.Default.Send(new ScrollToChatMessage(tempMessage));
 
             try
@@ -305,40 +447,23 @@ namespace KamPay.ViewModels
                 var request = new SendMessageRequest
                 {
                     ReceiverId = Conversation.GetOtherUserId(_currentUser.UserId),
-                    Content = messageContent.Trim(),
+                    Content = messageContent,
                     Type = MessageType.Text,
                     ProductId = Conversation.ProductId
                 };
 
                 if (string.IsNullOrEmpty(request.ReceiverId))
                 {
-                    // Hata: Geçici mesajı kaldır
                     Messages.Remove(tempMessage);
                     await Application.Current.MainPage.DisplayAlert("Hata", "Alıcı bilgisi bulunamadı.", "Tamam");
                     MessageText = messageContent;
                     return;
                 }
 
-                // Arka planda Firebase'e gönder
                 var result = await _messagingService.SendMessageAsync(request, _currentUser);
 
-                if (result.Success)
+                if (!result.Success)
                 {
-                    // ✅ Başarılı: Geçici mesajı gerçek mesajla değiştir
-                    var realMessage = result.Data;
-                    realMessage.IsSentByMe = true;
-                    realMessage.IsDelivered = true;
-
-                    // Geçici mesajı bul ve kaldır
-                    Messages.Remove(tempMessage);
-
-                    // Gerçek mesajı doğru sıraya ekle (listener eklemeden önce)
-                    // NOT: Listener zaten ekleyecek, o yüzden burada eklemeye gerek yok
-                    // InsertMessageInOrder(realMessage); 
-                }
-                else
-                {
-                    // ❌ Hata: Geçici mesajı kaldır ve kullanıcıyı bilgilendir
                     Messages.Remove(tempMessage);
                     await Application.Current.MainPage.DisplayAlert("Hata", result.Message ?? "Mesaj gönderilemedi", "Tamam");
                     MessageText = messageContent;
@@ -346,7 +471,6 @@ namespace KamPay.ViewModels
             }
             catch (Exception ex)
             {
-                // ❌ İstisna: Geçici mesajı kaldır
                 Messages.Remove(tempMessage);
                 await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
                 MessageText = messageContent;
@@ -361,18 +485,65 @@ namespace KamPay.ViewModels
         [RelayCommand]
         private async Task GoBackAsync()
         {
-            // Listener'ı temizle
-            Dispose();
+            // Mevcut konuşmayı cache'e kaydet
+            SaveToCache(ConversationId);
+
+            // Listener'ı DURDURMA (cache'den dönünce tekrar başlayacak)
+            CleanupCurrentConversation();
+
             await Shell.Current.GoToAsync("..");
         }
 
         public void Dispose()
         {
             Console.WriteLine("🧹 ChatViewModel dispose ediliyor...");
+
+            // Son durumu kaydet
+            if (!string.IsNullOrEmpty(_activeConversationId))
+            {
+                SaveToCache(_activeConversationId);
+            }
+
             _messagesSubscription?.Dispose();
             _messagesSubscription = null;
             _isListenerActive = false;
-            _activeConversationId = null;
+            _initialLoadComplete = false;
         }
+
+        // 🆕 Cache temizleme (Memory management)
+        public static void ClearCache()
+        {
+            _conversationCache.Clear();
+            Console.WriteLine("🗑️ Tüm cache temizlendi");
+        }
+
+        public static void ClearOldCache(int maxAgeMinutes = 30)
+        {
+            var now = DateTime.UtcNow;
+            var oldKeys = _conversationCache
+                .Where(kvp => (now - kvp.Value.CachedAt).TotalMinutes > maxAgeMinutes)
+                .Select(kvp => kvp.Key)
+                .ToList();
+
+            foreach (var key in oldKeys)
+            {
+                _conversationCache.Remove(key);
+            }
+
+            if (oldKeys.Any())
+            {
+                Console.WriteLine($"🗑️ {oldKeys.Count} eski cache temizlendi");
+            }
+        }
+    }
+
+    // 🆕 Cache state modeli
+    public class ConversationState
+    {
+        public List<Message> Messages { get; set; }
+        public Conversation Conversation { get; set; }
+        public string OtherUserName { get; set; }
+        public string OtherUserPhoto { get; set; }
+        public DateTime CachedAt { get; set; }
     }
 }

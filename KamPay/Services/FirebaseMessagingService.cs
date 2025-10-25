@@ -83,12 +83,14 @@ namespace KamPay.Services
                     }
                 }
 
-                await _firebaseClient
+                // 🔥 OPTIMIZE: Paralel yazma işlemleri
+                var messageTask = _firebaseClient
                     .Child(Constants.MessagesCollection)
                     .Child(conversation.ConversationId)
                     .Child(message.MessageId)
                     .PutAsync(message);
 
+                // Conversation güncelleme
                 conversation.LastMessage = message.Type == MessageType.Text ? message.Content : "📷 Medya";
                 conversation.LastMessageTime = DateTime.UtcNow;
                 conversation.LastMessageSenderId = sender.UserId;
@@ -99,10 +101,13 @@ namespace KamPay.Services
                 else
                     conversation.UnreadCountUser2++;
 
-                await _firebaseClient
+                var conversationTask = _firebaseClient
                     .Child(Constants.ConversationsCollection)
                     .Child(conversation.ConversationId)
                     .PutAsync(conversation);
+
+                // 🔥 İki işlemi paralel bekle
+                await Task.WhenAll(messageTask, conversationTask);
 
                 return ServiceResult<Message>.SuccessResult(message, "Mesaj başarıyla gönderildi.");
             }
@@ -113,6 +118,7 @@ namespace KamPay.Services
             }
         }
 
+        // 🔥 OPTIMIZE: Limit ve sıralama ekle
         public async Task<ServiceResult<List<Message>>> GetConversationMessagesAsync(string conversationId, int limit = 50)
         {
             try
@@ -120,14 +126,19 @@ namespace KamPay.Services
                 var messagesRef = await _firebaseClient
                     .Child(Constants.MessagesCollection)
                     .Child(conversationId)
+                    .OrderByKey()
+                    .LimitToLast(limit) // 🔥 Firebase'den sadece son N mesajı çek
                     .OnceAsync<Message>();
 
                 var messages = messagesRef
-                    .Select(m => m.Object)
+                    .Select(m =>
+                    {
+                        var msg = m.Object;
+                        msg.MessageId = m.Key;
+                        return msg;
+                    })
                     .Where(m => !m.IsDeleted)
-                    .OrderByDescending(m => m.SentAt)
-                    .Take(limit)
-                    .Reverse()
+                    .OrderBy(m => m.SentAt) // Zaten limit'li geldi, sıralama hafif
                     .ToList();
 
                 return ServiceResult<List<Message>>.SuccessResult(messages);
@@ -138,17 +149,28 @@ namespace KamPay.Services
             }
         }
 
+        // 🔥 OPTIMIZE: Client-side filtering (Firebase.Database.net limitasyonu nedeniyle)
         public async Task<ServiceResult<List<Conversation>>> GetUserConversationsAsync(string userId)
         {
             try
             {
-                var allConversations = await _firebaseClient
+                // Firebase.Database.net kütüphanesi çoklu index sorgusunu desteklemiyor
+                // Tüm konuşmaları çek, sonra client-side filtrele
+                var allConversationsTask = _firebaseClient
                     .Child(Constants.ConversationsCollection)
                     .OnceAsync<Conversation>();
 
+                var allConversations = await allConversationsTask;
+
                 var conversations = allConversations
-                    .Select(c => c.Object)
-                    .Where(c => c.IsActive && (c.User1Id == userId || c.User2Id == userId))
+                    .Select(c =>
+                    {
+                        var conv = c.Object;
+                        conv.ConversationId = c.Key;
+                        return conv;
+                    })
+                    .Where(c => c.IsActive &&
+                               (c.User1Id == userId || c.User2Id == userId))
                     .OrderByDescending(c => c.LastMessageTime)
                     .ToList();
 
@@ -164,6 +186,7 @@ namespace KamPay.Services
         {
             try
             {
+                // 🔥 OPTIMIZE: Önce cache'den kontrol et (isteğe bağlı)
                 var allConversations = await _firebaseClient
                     .Child(Constants.ConversationsCollection)
                     .OnceAsync<Conversation>();
@@ -180,15 +203,21 @@ namespace KamPay.Services
                     return ServiceResult<Conversation>.SuccessResult(existing);
                 }
 
-                var user1 = await _firebaseClient
+                // 🔥 Paralel kullanıcı sorguları
+                var user1Task = _firebaseClient
                     .Child(Constants.UsersCollection)
                     .Child(user1Id)
                     .OnceSingleAsync<User>();
 
-                var user2 = await _firebaseClient
+                var user2Task = _firebaseClient
                     .Child(Constants.UsersCollection)
                     .Child(user2Id)
                     .OnceSingleAsync<User>();
+
+                await Task.WhenAll(user1Task, user2Task);
+
+                var user1 = user1Task.Result;
+                var user2 = user2Task.Result;
 
                 if (user1 == null || user2 == null)
                 {
@@ -244,23 +273,33 @@ namespace KamPay.Services
                     .Child(conversationId)
                     .OnceSingleAsync<Conversation>();
 
-                await CheckAndBroadcastUnreadMessageStatus(readerUserId);
+                if (conversation == null)
+                    return ServiceResult<bool>.FailureResult("Konuşma bulunamadı.");
 
-                if (conversation == null) return ServiceResult<bool>.FailureResult("Konuşma bulunamadı.");
+                bool needsUpdate = false;
 
-                if (conversation.User1Id == readerUserId)
+                if (conversation.User1Id == readerUserId && conversation.UnreadCountUser1 > 0)
                 {
                     conversation.UnreadCountUser1 = 0;
+                    needsUpdate = true;
                 }
-                else if (conversation.User2Id == readerUserId)
+                else if (conversation.User2Id == readerUserId && conversation.UnreadCountUser2 > 0)
                 {
                     conversation.UnreadCountUser2 = 0;
+                    needsUpdate = true;
                 }
 
-                await _firebaseClient
-                    .Child(Constants.ConversationsCollection)
-                    .Child(conversationId)
-                    .PutAsync(conversation);
+                // 🔥 Sadece değişiklik varsa Firebase'e yaz
+                if (needsUpdate)
+                {
+                    await _firebaseClient
+                        .Child(Constants.ConversationsCollection)
+                        .Child(conversationId)
+                        .PutAsync(conversation);
+
+                    // Okunmamış sayısını güncelle
+                    await CheckAndBroadcastUnreadMessageStatus(readerUserId);
+                }
 
                 return ServiceResult<bool>.SuccessResult(true);
             }
@@ -275,20 +314,14 @@ namespace KamPay.Services
             try
             {
                 var conversationsResult = await GetUserConversationsAsync(userId);
-                if (!conversationsResult.Success) return ServiceResult<int>.FailureResult("Okunmamış mesajlar sayılamadı.");
+                if (!conversationsResult.Success)
+                    return ServiceResult<int>.FailureResult("Okunmamış mesajlar sayılamadı.");
 
-                int totalUnread = 0;
-                foreach (var convo in conversationsResult.Data)
-                {
-                    if (convo.User1Id == userId)
-                    {
-                        totalUnread += convo.UnreadCountUser1;
-                    }
-                    else
-                    {
-                        totalUnread += convo.UnreadCountUser2;
-                    }
-                }
+                int totalUnread = conversationsResult.Data
+                    .Sum(convo => convo.User1Id == userId
+                        ? convo.UnreadCountUser1
+                        : convo.UnreadCountUser2);
+
                 return ServiceResult<int>.SuccessResult(totalUnread);
             }
             catch (Exception ex)
@@ -326,7 +359,8 @@ namespace KamPay.Services
             }
         }
 
-        // 🔥 YENİ: Konuşmaları real-time dinle
+        // 🔥 UYARI: Bu metod artık kullanılmıyor (direkt Firebase Observable kullanılıyor)
+        [Obsolete("Direkt ViewModel'de Firebase Observable kullanın")]
         public IDisposable SubscribeToConversations(string userId, Action<List<Conversation>> onConversationsChanged)
         {
             var observable = _firebaseClient
@@ -337,7 +371,6 @@ namespace KamPay.Services
             {
                 try
                 {
-                    // Tüm aktif konuşmaları tekrar çek
                     Task.Run(async () =>
                     {
                         var result = await GetUserConversationsAsync(userId);
@@ -357,7 +390,8 @@ namespace KamPay.Services
             });
         }
 
-        // 🔥 YENİ: Mesajları real-time dinle
+        // 🔥 UYARI: Bu metod artık kullanılmıyor (direkt ViewModel'de Firebase Observable kullanılıyor)
+        [Obsolete("Direkt ViewModel'de Firebase Observable kullanın")]
         public IDisposable SubscribeToMessages(string conversationId, Action<List<Message>> onMessagesChanged)
         {
             var observable = _firebaseClient
