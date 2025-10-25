@@ -14,9 +14,8 @@
         <converters:IsAcceptedConverter x:Key="IsAcceptedConverter" />
     </ContentPage.Resources>
 
-    <ContentPage.Behaviors>
-        <toolkit:EventToCommandBehavior EventName="Appearing" Command="{Binding LoadRequestsCommand}" />
-    </ContentPage.Behaviors>
+    <!-- ❌ KALDIR: EventToCommandBehavior artık yok -->
+    <!-- Real-time listener zaten çalışıyor, gereksiz yükleme yapma -->
 
     <!-- 🔥 Tüm sayfa tek bir Grid içinde -->
     <Grid>
@@ -74,7 +73,7 @@
                     <!-- Giden Talepler -->
                     <Frame Margin="10" Padding="15" BorderColor="LightGray">
                         <VerticalStackLayout>
-                            <Label Text="Giden Talepler" FontSize="Title" FontAttributes="Bold" Padding="0,0,0,10"/>
+                            <Label Text="Gönderilen Talepler" FontSize="Title" FontAttributes="Bold" Padding="0,0,0,10"/>
                             <CollectionView ItemsSource="{Binding OutgoingRequests}">
                                 <CollectionView.ItemTemplate>
                                     <DataTemplate x:DataType="models:ServiceRequest">
@@ -83,21 +82,11 @@
                                                 <Label Text="{Binding ServiceTitle}" FontAttributes="Bold"/>
                                                 <Label Text="{Binding Status, StringFormat='Durum: {0}'}" />
 
-                                                <!-- 🟢 Ödeme yöntemi seçimi alanı -->
-                                                <StackLayout Margin="0,5,0,0" Spacing="8"
-                                                             IsVisible="{Binding Status, Converter={StaticResource IsAcceptedConverter}}">
-                                                    <Label Text="Ödeme Yöntemi Seçin:" FontAttributes="Bold" />
-                                                    <Picker Title="Seçiniz"
-                                                            ItemsSource="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=PaymentMethods}"
-                                                            ItemDisplayBinding="{Binding DisplayName}"
-                                                            SelectedIndexChanged="OnPaymentMethodSelected"/>
-                                                </StackLayout>
-
-                                                <!-- 🟢 Tamamla butonu -->
-                                                <Button Text="Tamamlandı Olarak İşaretle"
+                                                <Button Text="Hizmeti Tamamla ve Öde" 
                                                         IsVisible="{Binding Status, Converter={StaticResource IsAcceptedConverter}}"
                                                         Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=CompleteRequestCommand}" 
-                                                        CommandParameter="{Binding .}" />
+                                                        CommandParameter="{Binding .}" 
+                                                        BackgroundColor="#4CAF50" />
                                             </VerticalStackLayout>
                                         </Frame>
                                     </DataTemplate>
@@ -122,23 +111,16 @@
                 </VerticalStackLayout>
             </ScrollView>
         </RefreshView>
-        <!-- 🔹 BURADA KAPANIYOR -->
 
-        <!-- ✅ Loading Overlay en üstte -->
+        <!-- Loading Overlay -->
         <Grid IsVisible="{Binding IsLoading}"
-              BackgroundColor="#80FFFFFF"
-              InputTransparent="False">
-            <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="10">
-                <ActivityIndicator IsRunning="True" 
-                                   Color="{StaticResource Primary}"
-                                   WidthRequest="40"
-                                   HeightRequest="40"/>
-                <Label Text="Talepler yükleniyor..."
-                       TextColor="{StaticResource Primary}"
-                       FontSize="14"
-                       HorizontalTextAlignment="Center"/>
-            </VerticalStackLayout>
+              BackgroundColor="#80000000"
+              HorizontalOptions="Fill"
+              VerticalOptions="Fill">
+            <ActivityIndicator IsRunning="True" 
+                               Color="White" 
+                               WidthRequest="50" 
+                               HeightRequest="50" />
         </Grid>
-
     </Grid>
 </ContentPage>

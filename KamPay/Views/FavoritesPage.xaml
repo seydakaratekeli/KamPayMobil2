@@ -4,13 +4,14 @@
              xmlns:vm="clr-namespace:KamPay.ViewModels"
              xmlns:models="clr-namespace:KamPay.Models"
              x:Class="KamPay.Views.FavoritesPage"
+             x:DataType="vm:FavoritesViewModel"
              Title="Favoriler"
              Shell.BackgroundColor="{StaticResource Primary}">
 
     <Grid>
-
-        <!-- Asıl içerik -->
-  
+        <!-- 🔥 YENİ: RefreshView eklendi -->
+        <RefreshView Command="{Binding RefreshFavoritesCommand}" 
+                     IsRefreshing="{Binding IsLoading}">
 
             <CollectionView ItemsSource="{Binding FavoriteItems}"
                             SelectionMode="None">
@@ -89,9 +90,9 @@
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>
-     
+        </RefreshView>
 
-        <!-- 🔹 Yükleme Katmanı (Overlay) -->
+        <!-- Yükleme Overlay -->
         <Grid IsVisible="{Binding IsLoading}"
               BackgroundColor="#80000000"
               InputTransparent="False">
@@ -102,6 +103,5 @@
                                VerticalOptions="Center"
                                HorizontalOptions="Center" />
         </Grid>
-
     </Grid>
 </ContentPage>

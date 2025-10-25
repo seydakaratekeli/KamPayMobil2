@@ -1,34 +1,49 @@
-
-using KamPay.ViewModels;
+﻿using KamPay.ViewModels;
 
 namespace KamPay.Views;
 
 public partial class FavoritesPage : ContentPage
 {
+    private readonly FavoritesViewModel _viewModel;
+    private bool _isFirstLoad = true; // 🔥 YENİ: İlk yüklenme kontrolü
+
     public FavoritesPage(FavoritesViewModel vm)
     {
         InitializeComponent();
-        BindingContext = vm;
+        _viewModel = vm;
+        BindingContext = _viewModel;
     }
 
-    // YEN�: OnAppearing metodu eklendi
-    protected override void OnAppearing()
+    // 🔥 Sayfa her göründüğünde çağrılır
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
-        // ViewModel "partial" oldu�u i�in "vm.InitializeCommand" art�k bulunacak ve hata vermeyecektir.
-        if (BindingContext is FavoritesViewModel vm && vm.InitializeCommand.CanExecute(null))
+
+        // 🔥 Sadece ilk kez yükle, sonraki gelişlerde real-time listener zaten çalışıyor
+        if (_isFirstLoad)
         {
-            vm.InitializeCommand.Execute(null);
+            await _viewModel.InitializeAsync();
+            _isFirstLoad = false;
+            System.Diagnostics.Debug.WriteLine("✅ FavoritesPage: İlk yükleme (Real-time listener aktif)");
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine("✅ FavoritesPage: Cache'den gösterildi (Listener zaten aktif)");
         }
     }
 
-    // Mevcut OnDisappearing metodu AYNEN KALIYOR
+    // 🔥 DÜZELTİLDİ: base.OnDisappearing() çağrısı
     protected override void OnDisappearing()
     {
-        base.OnAppearing(); // D�KKAT: Burada bir kopyala-yap��t�r hatas� olmu� olabilir, OnDisappearing metodu base.OnDisappearing() �a��rmal�d�r.
-        if (BindingContext is IDisposable disposable)
-        {
-            disposable.Dispose();
-        }
+        base.OnDisappearing(); // 🔥 DOĞRU METHOD!
+        // 🔥 Dispose ETME - Listener çalışmaya devam etsin
+        System.Diagnostics.Debug.WriteLine("⏸️ FavoritesPage: Arka plana alındı (Listener aktif)");
+    }
+
+    // 🔥 Sayfa bellekten tamamen kaldırılınca otomatik çağrılır
+    ~FavoritesPage()
+    {
+        _viewModel?.Dispose();
+        System.Diagnostics.Debug.WriteLine("🗑️ FavoritesPage: Dispose edildi");
     }
 }

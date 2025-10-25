@@ -14,6 +14,11 @@ public partial class ProfileViewModel : ObservableObject
     private readonly IUserProfileService _profileService;
     private readonly IStorageService _storageService;
 
+    // 🔥 YENİ: Cache flag - Sadece bir kez yükle
+    private bool _isDataLoaded = false;
+    private DateTime _lastLoadTime = DateTime.MinValue;
+    private readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(5);
+
     [ObservableProperty]
     private User currentUser;
 
@@ -42,7 +47,21 @@ public partial class ProfileViewModel : ObservableObject
         _profileService = profileService;
         _storageService = storageService;
 
-        _ = LoadProfileAsync();
+        // ❌ KALDIR: Constructor'da yükleme yapma
+        // _ = LoadProfileAsync();
+    }
+
+    // 🔥 YENİ: Public initialize metodu - Sayfa OnAppearing'den çağrılacak
+    public async Task InitializeAsync()
+    {
+        // Cache kontrolü: Eğer veri yüklenmişse ve süre dolmamışsa yeniden yükleme
+        if (_isDataLoaded && (DateTime.UtcNow - _lastLoadTime) < _cacheExpiration)
+        {
+            Console.WriteLine("✅ Profil cache'den yüklendi");
+            return;
+        }
+
+        await LoadProfileAsync();
     }
 
     [RelayCommand]
@@ -107,6 +126,11 @@ public partial class ProfileViewModel : ObservableObject
                     MyBadges.Add(badge);
                 }
             }
+
+            // 🔥 Cache'i işaretle
+            _isDataLoaded = true;
+            _lastLoadTime = DateTime.UtcNow;
+            Console.WriteLine("✅ Profil verileri yüklendi ve cache'lendi");
         }
         catch (Exception ex)
         {
@@ -122,6 +146,8 @@ public partial class ProfileViewModel : ObservableObject
     private async Task RefreshProfileAsync()
     {
         IsRefreshing = true;
+        // 🔥 Refresh'te cache'i sıfırla ve yeniden yükle
+        _isDataLoaded = false;
         await LoadProfileAsync();
         IsRefreshing = false;
     }
@@ -217,6 +243,9 @@ public partial class ProfileViewModel : ObservableObject
                 OnPropertyChanged(nameof(CurrentUser));
 
                 await Application.Current.MainPage.DisplayAlert("Başarılı", "Profil güncellendi!", "Tamam");
+
+                // 🔥 Cache'i sıfırla ve yeniden yükle
+                _isDataLoaded = false;
                 await LoadProfileAsync();
             }
             else
@@ -314,5 +343,12 @@ public partial class ProfileViewModel : ObservableObject
     {
         if (product == null) return;
         await Shell.Current.GoToAsync($"productdetail?productId={product.ProductId}");
+    }
+
+    // 🔥 YENİ: Cache'i manuel sıfırlama metodu (ihtiyaç halinde)
+    public void InvalidateCache()
+    {
+        _isDataLoaded = false;
+        Console.WriteLine("🗑️ Profil cache'i temizlendi");
     }
 }

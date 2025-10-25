@@ -5,6 +5,7 @@ namespace KamPay.Views
     public partial class ServiceRequestsPage : ContentPage
     {
         private readonly ServiceRequestsViewModel _viewModel;
+        private bool _isFirstLoad = true; // 🔥 YENİ: İlk yüklenme kontrolü
 
         public ServiceRequestsPage(ServiceRequestsViewModel vm)
         {
@@ -19,7 +20,6 @@ namespace KamPay.Views
             if (sender is Picker picker &&
                 picker.SelectedItem is ServiceRequestsViewModel.PaymentOption option)
             {
-                // 🔥 Direkt _viewModel kullan, BindingContext'e güvenme
                 if (_viewModel != null)
                 {
                     _viewModel.SelectedPaymentMethod = option.Method;
@@ -31,17 +31,27 @@ namespace KamPay.Views
         protected override void OnAppearing()
         {
             base.OnAppearing();
-            System.Diagnostics.Debug.WriteLine("✅ ServiceRequestsPage: Aktif");
+
+            // 🔥 Sadece ilk kez yükle, sonraki gelişlerde real-time listener zaten çalışıyor
+            if (_isFirstLoad)
+            {
+                _isFirstLoad = false;
+                System.Diagnostics.Debug.WriteLine("✅ ServiceRequestsPage: İlk yükleme (Real-time listener aktif)");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("✅ ServiceRequestsPage: Cache'den gösterildi (Listener zaten aktif)");
+            }
         }
 
         protected override void OnDisappearing()
         {
             base.OnDisappearing();
-            // 🔥 Burada Dispose ETME!
-            System.Diagnostics.Debug.WriteLine("⏸️ ServiceRequestsPage: Arka plana alındı");
+            // 🔥 Dispose ETME - Listener çalışmaya devam etsin
+            System.Diagnostics.Debug.WriteLine("⏸️ ServiceRequestsPage: Arka plana alındı (Listener aktif)");
         }
 
-        // 🔥 Sayfa bellekten kaldırılınca otomatik çağrılır
+        // 🔥 Sayfa bellekten tamamen kaldırılınca otomatik çağrılır
         ~ServiceRequestsPage()
         {
             _viewModel?.Dispose();

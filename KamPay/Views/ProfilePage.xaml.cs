@@ -1,27 +1,32 @@
-using KamPay.ViewModels;
-using Microsoft.Maui.Controls;
+﻿using KamPay.ViewModels;
 
-namespace KamPay.Views;
-
-public partial class ProfilePage : ContentPage
+namespace KamPay.Views
 {
-    public ProfilePage(ProfileViewModel vm)
+    public partial class ProfilePage : ContentPage
     {
-        InitializeComponent();
-        BindingContext = vm;
-    }
+        private readonly ProfileViewModel _viewModel;
 
-   
-    protected override void OnAppearing()
-    {
-        base.OnAppearing();
-        if (BindingContext is ProfileViewModel vm)
+        public ProfilePage(ProfileViewModel viewModel)
         {
-            // Komutu �a��rarak profil verilerini yeniden y�kle
-            if (vm.LoadProfileCommand.CanExecute(null))
-            {
-                vm.LoadProfileCommand.Execute(null);
-            }
+            InitializeComponent();
+            _viewModel = viewModel;
+            BindingContext = _viewModel;
+        }
+
+        // 🔥 Sayfa her göründüğünde SADECE cache kontrolü yap
+        protected override async void OnAppearing()
+        {
+            base.OnAppearing();
+
+            // InitializeAsync cache kontrolü yapar, gerekirse yükler
+            await _viewModel.InitializeAsync();
+        }
+
+        protected override void OnDisappearing()
+        {
+            base.OnDisappearing();
+            // Dispose etme - cache'i koruyalım
+            System.Diagnostics.Debug.WriteLine("⏸️ ProfilePage: Arka plana alındı");
         }
     }
 }

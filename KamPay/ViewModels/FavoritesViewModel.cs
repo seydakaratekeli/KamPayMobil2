@@ -1,4 +1,4 @@
-// KamPay/ViewModels/FavoritesViewModel.cs
+ï»¿// KamPay/ViewModels/FavoritesViewModel.cs
 
 using System;
 using System.Collections.ObjectModel;
@@ -13,6 +13,7 @@ using Firebase.Database.Query;
 using KamPay.Helpers;
 using System.Reactive.Linq;
 using KamPay.Views;
+using Firebase.Database.Streaming;
 
 namespace KamPay.ViewModels
 {
@@ -22,13 +23,16 @@ namespace KamPay.ViewModels
         private readonly IAuthenticationService _authService;
         private IDisposable _favoritesSubscription;
         private readonly FirebaseClient _firebaseClient = new(Constants.FirebaseRealtimeDbUrl);
-        private bool _isInitialized = false; // Verinin tekrar tekrar yüklenmesini engellemek için
+
+        // ğŸ”¥ Cache kontrolÃ¼ - Listener sÃ¼rekli aÃ§Ä±k kalacak
+        private bool _isInitialized = false;
+        private readonly HashSet<string> _favoriteIds = new(); // Duplicate kontrolÃ¼
 
         [ObservableProperty]
         private bool isLoading = true;
 
         [ObservableProperty]
-        private string emptyMessage = "Henüz favori ürününüz yok";
+        private string emptyMessage = "HenÃ¼z favori Ã¼rÃ¼nÃ¼nÃ¼z yok";
 
         public ObservableCollection<Favorite> FavoriteItems { get; } = new();
 
@@ -36,81 +40,136 @@ namespace KamPay.ViewModels
         {
             _favoriteService = favoriteService;
             _authService = authService;
-            // Constructor'daki bu çağrıyı SİLİYORUZ:
-            // StartListeningForFavorites();
         }
 
-        // YENİ: Başlatma komutu
-        [RelayCommand]
-        private async Task InitializeAsync()
+        // ğŸ”¥ DÃœZELTÄ°LDÄ°: public yapÄ±ldÄ±
+        public async Task InitializeAsync()
         {
-            if (_isInitialized) return; // Zaten başlatıldıysa tekrar çalıştırma
+            // ğŸ”¥ EÄŸer zaten baÅŸlatÄ±lmÄ±ÅŸsa, sadece boÅŸ kontrol yap
+            if (_isInitialized)
+            {
+                Console.WriteLine("âœ… Favoriler cache'den gÃ¶steriliyor (Listener aktif)");
+                return;
+            }
 
-            IsLoading = true;
-            try
-            {
-                await StartListeningForFavoritesAsync();
-                _isInitialized = true;
-            }
-            catch (Exception ex)
-            {
-                // Hata durumunu kullanıcıya bildirmek için ideal bir yer
-                Console.WriteLine($"Favoriler yüklenirken hata oluştu: {ex.Message}");
-                EmptyMessage = "Favoriler yüklenemedi.";
-            }
-            finally
-            {
-                IsLoading = false;
-            }
+            await StartListeningForFavoritesAsync();
         }
 
         private async Task StartListeningForFavoritesAsync()
         {
-            var currentUser = await _authService.GetCurrentUserAsync();
-            if (currentUser == null)
+            if (_favoritesSubscription != null)
             {
-                EmptyMessage = "Favorileri görmek için giriş yapmalısınız.";
+                Console.WriteLine("âš ï¸ Listener zaten aktif");
                 return;
             }
 
-            FavoriteItems.Clear();
+            IsLoading = true;
 
-            _favoritesSubscription = _firebaseClient
-                .Child(Constants.FavoritesCollection)
-                .OrderBy("UserId")
-                .EqualTo(currentUser.UserId)
-                .AsObservable<Favorite>()
-                .Subscribe(e =>
+            try
+            {
+                var currentUser = await _authService.GetCurrentUserAsync();
+                if (currentUser == null)
                 {
-                    MainThread.BeginInvokeOnMainThread(() =>
-                    {
-                        var favorite = e.Object;
-                        favorite.FavoriteId = e.Key;
+                    EmptyMessage = "Favorileri gÃ¶rmek iÃ§in giriÅŸ yapmalÄ±sÄ±nÄ±z.";
+                    IsLoading = false;
+                    return;
+                }
 
-                        var existingFav = FavoriteItems.FirstOrDefault(f => f.FavoriteId == favorite.FavoriteId);
-
-                        if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
+                // ğŸ”¥ Real-time listener baÅŸlat (Buffer ile optimize)
+                _favoritesSubscription = _firebaseClient
+                    .Child(Constants.FavoritesCollection)
+                    .OrderBy("UserId")
+                    .EqualTo(currentUser.UserId)
+                    .AsObservable<Favorite>()
+                    .Buffer(TimeSpan.FromMilliseconds(200)) // ğŸ”¥ 200ms batch
+                    .Where(batch => batch.Any())
+                    .Subscribe(
+                        events =>
                         {
-                            if (existingFav != null)
+                            MainThread.BeginInvokeOnMainThread(() =>
                             {
-                                var index = FavoriteItems.IndexOf(existingFav);
-                                FavoriteItems[index] = favorite;
-                            }
-                            else
+                                try
+                                {
+                                    ProcessFavoriteBatch(events);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"âŒ Favorite batch hatasÄ±: {ex.Message}");
+                                }
+                                finally
+                                {
+                                    if (!_isInitialized)
+                                    {
+                                        _isInitialized = true;
+                                        IsLoading = false;
+                                        Console.WriteLine("âœ… Favoriler listener baÅŸlatÄ±ldÄ±");
+                                    }
+                                }
+                            });
+                        },
+                        error =>
+                        {
+                            Console.WriteLine($"âŒ Firebase listener hatasÄ±: {error.Message}");
+                            MainThread.BeginInvokeOnMainThread(() =>
+                            {
+                                IsLoading = false;
+                                EmptyMessage = "Favoriler yÃ¼klenemedi.";
+                            });
+                        });
+
+                Console.WriteLine("ğŸ”¥ Favoriler real-time listener baÅŸlatÄ±ldÄ±");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"âŒ Favoriler yÃ¼klenirken hata: {ex.Message}");
+                EmptyMessage = "Favoriler yÃ¼klenemedi.";
+                IsLoading = false;
+            }
+        }
+
+        // ğŸ”¥ Batch processing - Clear() YOK
+        private void ProcessFavoriteBatch(IList<FirebaseEvent<Favorite>> events)
+        {
+            foreach (var e in events)
+            {
+                if (e.Object == null) continue;
+
+                var favorite = e.Object;
+                favorite.FavoriteId = e.Key;
+
+                var existing = FavoriteItems.FirstOrDefault(f => f.FavoriteId == favorite.FavoriteId);
+
+                switch (e.EventType)
+                {
+                    case FirebaseEventType.InsertOrUpdate:
+                        if (existing != null)
+                        {
+                            // GÃ¼ncelleme
+                            var index = FavoriteItems.IndexOf(existing);
+                            FavoriteItems[index] = favorite;
+                        }
+                        else
+                        {
+                            // ğŸ”¥ Duplicate check
+                            if (!_favoriteIds.Contains(favorite.FavoriteId))
                             {
                                 FavoriteItems.Insert(0, favorite);
+                                _favoriteIds.Add(favorite.FavoriteId);
                             }
                         }
-                        else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
+                        break;
+
+                    case FirebaseEventType.Delete:
+                        if (existing != null)
                         {
-                            if (existingFav != null)
-                            {
-                                FavoriteItems.Remove(existingFav);
-                            }
+                            FavoriteItems.Remove(existing);
+                            _favoriteIds.Remove(favorite.FavoriteId);
                         }
-                        EmptyMessage = FavoriteItems.Any() ? string.Empty : "Henüz favori ürününüz yok.";
-                    });
-                });
+                        break;
+                }
+            }
+
+            EmptyMessage = FavoriteItems.Any() ? string.Empty : "HenÃ¼z favori Ã¼rÃ¼nÃ¼nÃ¼z yok.";
         }
 
         [RelayCommand]
@@ -124,17 +183,44 @@ namespace KamPay.ViewModels
         private async Task RemoveFavoriteAsync(Favorite favorite)
         {
             if (favorite == null) return;
-            var currentUser = await _authService.GetCurrentUserAsync();
-            if (currentUser != null)
+
+            try
             {
-                await _favoriteService.RemoveFromFavoritesAsync(currentUser.UserId, favorite.ProductId);
+                var currentUser = await _authService.GetCurrentUserAsync();
+                if (currentUser != null)
+                {
+                    var result = await _favoriteService.RemoveFromFavoritesAsync(currentUser.UserId, favorite.ProductId);
+
+                    if (!result.Success)
+                    {
+                        await Application.Current.MainPage.DisplayAlert("Hata", result.Message, "Tamam");
+                    }
+                    // âœ… Real-time listener otomatik gÃ¼ncelleyecek
+                }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"âŒ Favori Ã§Ä±karma hatasÄ±: {ex.Message}");
+                await Application.Current.MainPage.DisplayAlert("Hata", "Favorilerden Ã§Ä±karÄ±lamadÄ±", "Tamam");
+            }
+        }
+
+        // ğŸ”¥ Refresh command
+        [RelayCommand]
+        private async Task RefreshFavoritesAsync()
+        {
+            // Listener zaten Ã§alÄ±ÅŸÄ±yor, sadece UI'Ä± gÃ¼ncellemek iÃ§in kÄ±sa bir delay
+            await Task.Delay(300);
         }
 
         public void Dispose()
         {
+            // ğŸ”¥ SADECE uygulama kapanÄ±rken Ã§aÄŸrÄ±lmalÄ±
+            Console.WriteLine("ğŸ§¹ FavoritesViewModel dispose ediliyor...");
             _favoritesSubscription?.Dispose();
-            _isInitialized = false; // Sayfadan çıkıldığında yeniden yüklenebilmesi için sıfırla
+            _favoritesSubscription = null;
+            _favoriteIds.Clear();
+            _isInitialized = false;
         }
     }
 }
