@@ -662,6 +662,91 @@ public class FirebaseProductService : IProductService
             return ServiceResult<List<Product>>.FailureResult("Hata", ex.Message);
         }
     }
+    /// <summary>
+    /// Sayfalama desteği ile ürünleri getirir (Performans Optimizasyonu)
+    /// </summary>
+    public async Task<ServiceResult<List<Product>>> GetProductsPagedAsync(
+        int pageSize = 20,
+        string lastKey = null,
+        ProductFilter filter = null)
+    {
+        try
+        {
+            // 🔥 Firebase query'yi doğru şekilde oluştur
+            var productsRef = _firebaseClient.Child(Constants.ProductsCollection);
+
+            // Önce OrderBy uygula
+            var orderedQuery = productsRef.OrderBy("CreatedAt");
+
+            // Sayfalama için StartAt veya LimitToFirst
+            IEnumerable<FirebaseObject<Product>> items;
+
+            if (!string.IsNullOrEmpty(lastKey))
+            {
+                // Önceki sayfadan devam et
+                items = await orderedQuery
+                    .StartAt(lastKey)
+                    .LimitToFirst(pageSize + 1) // +1 ile bir sonraki sayfa var mı kontrol et
+                    .OnceAsync<Product>();
+            }
+            else
+            {
+                // İlk sayfa
+                items = await orderedQuery
+                    .LimitToFirst(pageSize)
+                    .OnceAsync<Product>();
+            }
+
+            // 🔥 Product listesine dönüştür
+            var products = items.Select(p =>
+            {
+                var product = p.Object;
+                product.ProductId = p.Key;
+                return product;
+            }).ToList();
+
+            // lastKey'i atla (eğer pagination yapılıyorsa)
+            if (!string.IsNullOrEmpty(lastKey) && products.Any() && products.First().ProductId == lastKey)
+            {
+                products.RemoveAt(0);
+            }
+
+            // 🔥 Hafif filtreleme (ağır işlemler UI thread'de yapılmayacak)
+            if (filter != null)
+            {
+                if (filter.OnlyActive)
+                {
+                    products = products.Where(p => p.IsActive).ToList();
+                }
+
+                if (!string.IsNullOrWhiteSpace(filter.SearchText))
+                {
+                    var searchLower = filter.SearchText.ToLowerInvariant();
+                    products = products.Where(p =>
+                        p.Title.ToLowerInvariant().Contains(searchLower) ||
+                        p.Description.ToLowerInvariant().Contains(searchLower)
+                    ).ToList();
+                }
+
+                if (!string.IsNullOrWhiteSpace(filter.CategoryId))
+                {
+                    products = products.Where(p => p.CategoryId == filter.CategoryId).ToList();
+                }
+
+                if (filter.Type.HasValue)
+                {
+                    products = products.Where(p => p.Type == filter.Type.Value).ToList();
+                }
+            }
+
+            return ServiceResult<List<Product>>.SuccessResult(products);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<List<Product>>.FailureResult("Ürünler yüklenemedi", ex.Message);
+        }
+    }
+
 
     // --- YENİ EKLENEN METOT 2 ---
     public async Task<ServiceResult<bool>> UpdateProductOwnerAsync(string productId, string newOwnerId, bool markAsSold = true)

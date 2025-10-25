@@ -26,6 +26,11 @@ namespace KamPay.ViewModels
         // 🔥 CACHE: Her konuşma için ayrı state
         private static readonly Dictionary<string, ConversationState> _conversationCache = new();
 
+        // 🔥 CACHE: Otomatik temizleme için timer
+        private static System.Timers.Timer _cacheCleanupTimer;
+        private const int MaxCacheAgeMinutes = 15; // 15 dakikadan eski cache'leri temizle
+        private const int MaxCachedConversations = 10; // Maksimum 10 konuşma cache'le
+
         private IDisposable _messagesSubscription;
         private bool _isListenerActive = false;
         private string _activeConversationId;
@@ -53,7 +58,7 @@ namespace KamPay.ViewModels
         private bool isSending;
 
         [ObservableProperty]
-        private bool isRefreshing; // 🆕 Pull-to-refresh
+        private bool isRefreshing;
 
         public ObservableCollection<Message> Messages { get; } = new();
 
@@ -63,6 +68,14 @@ namespace KamPay.ViewModels
         {
             _messagingService = messagingService;
             _authService = authService;
+
+            // 🔥 Static timer başlat (sadece bir kez)
+            if (_cacheCleanupTimer == null)
+            {
+                _cacheCleanupTimer = new System.Timers.Timer(TimeSpan.FromMinutes(5).TotalMilliseconds);
+                _cacheCleanupTimer.Elapsed += (s, e) => CleanupOldCache();
+                _cacheCleanupTimer.Start();
+            }
         }
 
         partial void OnConversationIdChanged(string value)
@@ -81,13 +94,11 @@ namespace KamPay.ViewModels
             {
                 Console.WriteLine($"⚡ Cache'den yükleniyor: {ConversationId}");
 
-                // Cache'den mesajları geri yükle
                 if (_conversationCache.TryGetValue(ConversationId, out var cachedState))
                 {
                     RestoreFromCache(cachedState);
                 }
 
-                // Sadece okundu işaretle
                 if (_currentUser != null)
                 {
                     await _messagingService.MarkMessagesAsReadAsync(ConversationId, _currentUser.UserId);
@@ -129,7 +140,6 @@ namespace KamPay.ViewModels
                     _initialLoadComplete = true;
                     IsLoading = false;
 
-                    // Okundu işaretle
                     await _messagingService.MarkMessagesAsReadAsync(ConversationId, _currentUser.UserId);
                     return;
                 }
@@ -154,7 +164,6 @@ namespace KamPay.ViewModels
                 StartListeningToMessages();
                 _activeConversationId = ConversationId;
 
-                // Okundu işaretle
                 await _messagingService.MarkMessagesAsReadAsync(ConversationId, _currentUser.UserId);
             }
             catch (Exception ex)
@@ -165,10 +174,21 @@ namespace KamPay.ViewModels
             }
         }
 
-        // 🆕 CACHE: Durumu kaydet
+        // 🔥 OPTİMİZE: Cache kaydetme (LRU pattern)
         private void SaveToCache(string conversationId)
         {
             if (string.IsNullOrEmpty(conversationId)) return;
+
+            // 🔥 LRU: Maksimum cache sayısını kontrol et
+            if (_conversationCache.Count >= MaxCachedConversations)
+            {
+                var oldestKey = _conversationCache
+                    .OrderBy(kvp => kvp.Value.LastAccessedAt)
+                    .First().Key;
+
+                _conversationCache.Remove(oldestKey);
+                Console.WriteLine($"🗑️ LRU: En eski cache temizlendi: {oldestKey}");
+            }
 
             var state = new ConversationState
             {
@@ -176,24 +196,29 @@ namespace KamPay.ViewModels
                 Conversation = Conversation,
                 OtherUserName = OtherUserName,
                 OtherUserPhoto = OtherUserPhoto,
-                CachedAt = DateTime.UtcNow
+                CachedAt = DateTime.UtcNow,
+                LastAccessedAt = DateTime.UtcNow
             };
 
             _conversationCache[conversationId] = state;
             Console.WriteLine($"💾 Cache'e kaydedildi: {conversationId} ({state.Messages.Count} mesaj)");
         }
 
-        // 🆕 CACHE: Durumu geri yükle
+        // 🔥 Cache'den geri yükleme
         private void RestoreFromCache(ConversationState state)
         {
-            // Eski cache mi? (5 dakikadan eski)
-            if ((DateTime.UtcNow - state.CachedAt).TotalMinutes > 5)
+            // Cache yaşını kontrol et
+            if ((DateTime.UtcNow - state.CachedAt).TotalMinutes > MaxCacheAgeMinutes)
             {
                 Console.WriteLine("⚠️ Cache eski, yeniden yükleniyor...");
                 _conversationCache.Remove(ConversationId);
+                _initialLoadComplete = false;
                 _ = Task.Run(() => LoadChatAsync());
                 return;
             }
+
+            // Last accessed time güncelle (LRU için)
+            state.LastAccessedAt = DateTime.UtcNow;
 
             Messages.Clear();
             foreach (var msg in state.Messages)
@@ -211,7 +236,7 @@ namespace KamPay.ViewModels
             Console.WriteLine($"✅ Cache'den geri yüklendi: {Messages.Count} mesaj");
         }
 
-        // 🆕 CACHE: Mevcut konuşmayı temizle
+        // 🔥 Mevcut konuşmayı temizle
         private void CleanupCurrentConversation()
         {
             _messagesSubscription?.Dispose();
@@ -220,7 +245,7 @@ namespace KamPay.ViewModels
             _initialLoadComplete = false;
         }
 
-        // 🆕 Pull-to-Refresh
+        // 🔥 Pull-to-Refresh
         [RelayCommand]
         private async Task RefreshMessagesAsync()
         {
@@ -240,7 +265,7 @@ namespace KamPay.ViewModels
                 _initialLoadComplete = false;
                 StartListeningToMessages();
 
-                await Task.Delay(500); // UI için kısa gecikme
+                await Task.Delay(500);
             }
             catch (Exception ex)
             {
@@ -252,6 +277,7 @@ namespace KamPay.ViewModels
             }
         }
 
+        // 🔥 OPTİMİZE: 200ms buffer + batch processing
         private void StartListeningToMessages()
         {
             if (_isListenerActive)
@@ -289,7 +315,6 @@ namespace KamPay.ViewModels
                                     _initialLoadComplete = true;
                                     IsLoading = false;
 
-                                    // İlk yükleme sonrası scroll
                                     WeakReferenceMessenger.Default.Send(new ScrollToChatMessage(null));
                                 }
                             }
@@ -304,6 +329,7 @@ namespace KamPay.ViewModels
             _isListenerActive = true;
         }
 
+        // 🔥 Batch processing
         private void ProcessMessageBatch(IList<Firebase.Database.Streaming.FirebaseEvent<Message>> events)
         {
             bool shouldScroll = false;
@@ -352,8 +378,10 @@ namespace KamPay.ViewModels
             }
         }
 
+        // 🔥 Binary search insert (optimize edilmiş)
         private void InsertMessageSorted(Message newMessage)
         {
+            // Temp mesajı bul ve kaldır
             var tempMessage = Messages.FirstOrDefault(m => m.MessageId.StartsWith("temp_") &&
                                                             m.Content == newMessage.Content &&
                                                             Math.Abs((m.SentAt - newMessage.SentAt).TotalSeconds) < 10);
@@ -380,6 +408,7 @@ namespace KamPay.ViewModels
                 return;
             }
 
+            // Binary search
             int left = 0;
             int right = Messages.Count - 1;
 
@@ -485,20 +514,35 @@ namespace KamPay.ViewModels
         [RelayCommand]
         private async Task GoBackAsync()
         {
-            // Mevcut konuşmayı cache'e kaydet
             SaveToCache(ConversationId);
-
-            // Listener'ı DURDURMA (cache'den dönünce tekrar başlayacak)
             CleanupCurrentConversation();
-
             await Shell.Current.GoToAsync("..");
+        }
+
+        // 🔥 Otomatik cache temizleme
+        private static void CleanupOldCache()
+        {
+            var now = DateTime.UtcNow;
+            var oldKeys = _conversationCache
+                .Where(kvp => (now - kvp.Value.CachedAt).TotalMinutes > MaxCacheAgeMinutes)
+                .Select(kvp => kvp.Key)
+                .ToList();
+
+            foreach (var key in oldKeys)
+            {
+                _conversationCache.Remove(key);
+            }
+
+            if (oldKeys.Any())
+            {
+                Console.WriteLine($"🗑️ {oldKeys.Count} eski cache otomatik temizlendi");
+            }
         }
 
         public void Dispose()
         {
             Console.WriteLine("🧹 ChatViewModel dispose ediliyor...");
 
-            // Son durumu kaydet
             if (!string.IsNullOrEmpty(_activeConversationId))
             {
                 SaveToCache(_activeConversationId);
@@ -510,7 +554,7 @@ namespace KamPay.ViewModels
             _initialLoadComplete = false;
         }
 
-        // 🆕 Cache temizleme (Memory management)
+        // Public helper metodlar
         public static void ClearCache()
         {
             _conversationCache.Clear();
@@ -537,7 +581,7 @@ namespace KamPay.ViewModels
         }
     }
 
-    // 🆕 Cache state modeli
+    // 🔥 OPTİMİZE: Cache state modeli
     public class ConversationState
     {
         public List<Message> Messages { get; set; }
@@ -545,5 +589,6 @@ namespace KamPay.ViewModels
         public string OtherUserName { get; set; }
         public string OtherUserPhoto { get; set; }
         public DateTime CachedAt { get; set; }
+        public DateTime LastAccessedAt { get; set; } // 🔥 LRU için
     }
 }

@@ -4,6 +4,7 @@
              xmlns:vm="clr-namespace:KamPay.ViewModels"
              xmlns:models="clr-namespace:KamPay.Models"
              xmlns:converters="clr-namespace:KamPay.Converters"
+             xmlns:ffimageloading="clr-namespace:FFImageLoading.Maui;assembly=FFImageLoading.Maui"
              x:DataType="vm:ProductListViewModel"
              x:Class="KamPay.Views.ProductListPage"
              Shell.NavBarIsVisible="False">
@@ -40,7 +41,10 @@
 
                 <CollectionView ItemsSource="{Binding Products}"
                                 SelectionMode="None"
-                                EmptyView="{Binding EmptyMessage}">
+                                EmptyView="{Binding EmptyMessage}"
+                                 RemainingItemsThreshold="5"
+                RemainingItemsThresholdReachedCommand="{Binding LoadMoreProductsCommand}">
+
                     <CollectionView.Header>
                         <VerticalStackLayout Padding="10">
                             <SearchBar Placeholder="Ürün ara..." Text="{Binding SearchText}"/>
@@ -85,11 +89,28 @@
                         <DataTemplate x:DataType="models:Product">
                             <Frame Padding="10" CornerRadius="10" Margin="10,5" HasShadow="True">
                                 <Frame.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=ProductTappedCommand}" CommandParameter="{Binding .}"/>
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=ProductTappedCommand}" 
+                                                          CommandParameter="{Binding .}"/>
                                 </Frame.GestureRecognizers>
+
                                 <Grid>
                                     <Grid ColumnDefinitions="120, *" ColumnSpacing="10">
-                                        <Image Grid.Column="0" Source="{Binding ThumbnailUrl}" Aspect="AspectFill" HeightRequest="120" />
+
+                                        <!-- ✅ BURASI DEĞİŞTİ: FFImageLoading kullanıyoruz -->
+                                        <ffimageloading:CachedImage Grid.Column="0"
+                                                                    Source="{Binding ThumbnailUrl}"
+                                                                    Aspect="AspectFill"
+                                                                    HeightRequest="120"
+                                                                    WidthRequest="120"
+                                                                    CacheDuration="7"
+                                                                    RetryCount="3"
+                                                                    RetryDelay="250"
+                                                                    DownsampleToViewSize="True"
+                                                                    LoadingPlaceholder="loading_image.png"
+                                                                    ErrorPlaceholder="error_image.png"
+                                                                    FadeAnimationEnabled="True"
+                                                                    FadeAnimationDuration="300"/>
+
                                         <VerticalStackLayout Grid.Column="1" Spacing="5" VerticalOptions="Center">
                                             <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="16" />
                                             <Label Text="{Binding CategoryName}" FontSize="12" TextColor="{StaticResource Primary}" />

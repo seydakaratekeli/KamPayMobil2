@@ -25,7 +25,11 @@ namespace KamPay.Services
         Task<ServiceResult<bool>> MarkAsSoldAsync(string productId); // SATIŞ için
         Task<ServiceResult<bool>> MarkAsExchangedAsync(string productId); // TAKAS için
         Task<ServiceResult<bool>> MarkAsReservedAsync(string productId, bool isReserved);
-
+        // ✅ MEVCUT İNTERFACE'E EKLE
+        Task<ServiceResult<List<Product>>> GetProductsPagedAsync(
+            int pageSize = 20,
+            string lastKey = null,
+            ProductFilter filter = null);
 
 
     }

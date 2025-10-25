@@ -7,16 +7,30 @@ using System;
 using KamPay.Models;
 using KamPay.Services;
 using System.Collections.Generic;
+using Firebase.Database;
+using Firebase.Database.Query;
+using KamPay.Helpers;
+using System.Reactive.Linq;
+using Firebase.Database.Streaming;
 
 namespace KamPay.ViewModels
 {
-    public partial class ServiceSharingViewModel : ObservableObject
+    public partial class ServiceSharingViewModel : ObservableObject, IDisposable
     {
         private readonly IServiceSharingService _serviceService;
         private readonly IAuthenticationService _authService;
+        private readonly FirebaseClient _firebaseClient;
+        private IDisposable _servicesSubscription;
+
+        // 🔥 CACHE: Service tracking
+        private readonly HashSet<string> _serviceIds = new();
+        private bool _initialLoadComplete = false;
 
         [ObservableProperty]
         private bool isLoading;
+
+        [ObservableProperty]
+        private bool isRefreshing;
 
         [ObservableProperty]
         private string serviceTitle;
@@ -30,45 +44,207 @@ namespace KamPay.ViewModels
         [ObservableProperty]
         private int timeCredits = 1;
 
-
-        // 🟢 YENİ EKLENDİ: Hizmet fiyatı (₺)
         [ObservableProperty]
         private decimal servicePrice;
 
         public ObservableCollection<ServiceOffer> Services { get; } = new();
-
         public List<ServiceCategory> Categories { get; } = Enum.GetValues(typeof(ServiceCategory)).Cast<ServiceCategory>().ToList();
 
         public ServiceSharingViewModel(IServiceSharingService serviceService, IAuthenticationService authService)
         {
             _serviceService = serviceService ?? throw new ArgumentNullException(nameof(serviceService));
             _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+            _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
 
-            _ = LoadServicesAsync();
+            _ = InitializeAsync();
+        }
+
+        private async Task InitializeAsync()
+        {
+            IsLoading = true;
+
+            // Real-time listener başlat
+            StartListeningForServices();
+        }
+
+        // 🔥 OPTİMİZE: Real-time listener + batch processing
+        private void StartListeningForServices()
+        {
+            if (_servicesSubscription != null) return;
+
+            Console.WriteLine("🔥 Services listener başlatılıyor...");
+
+            _servicesSubscription = _firebaseClient
+                .Child(Constants.ServiceOffersCollection)
+                .AsObservable<ServiceOffer>()
+                .Where(e => e.Object != null && e.Object.IsAvailable)
+                .Buffer(TimeSpan.FromMilliseconds(350)) // 🔥 350ms batch
+                .Where(batch => batch.Any())
+                .Subscribe(
+                    events =>
+                    {
+                        MainThread.BeginInvokeOnMainThread(() =>
+                        {
+                            try
+                            {
+                                ProcessServiceBatch(events);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"❌ Service batch hatası: {ex.Message}");
+                            }
+                            finally
+                            {
+                                if (!_initialLoadComplete)
+                                {
+                                    _initialLoadComplete = true;
+                                    IsLoading = false;
+                                    Console.WriteLine("✅ Hizmetler yüklendi");
+                                }
+                            }
+                        });
+                    },
+                    error =>
+                    {
+                        Console.WriteLine($"❌ Firebase listener hatası: {error.Message}");
+                        MainThread.BeginInvokeOnMainThread(() => IsLoading = false);
+                    });
+        }
+
+        // 🔥 YENİ: Batch processing - Clear() YOK
+        private void ProcessServiceBatch(IList<FirebaseEvent<ServiceOffer>> events)
+        {
+            bool hasChanges = false;
+
+            foreach (var e in events)
+            {
+                var service = e.Object;
+                service.ServiceId = e.Key;
+
+                var existingService = Services.FirstOrDefault(s => s.ServiceId == service.ServiceId);
+
+                switch (e.EventType)
+                {
+                    case FirebaseEventType.InsertOrUpdate:
+                        if (existingService != null)
+                        {
+                            // Güncelleme
+                            var index = Services.IndexOf(existingService);
+                            Services[index] = service;
+                        }
+                        else
+                        {
+                            // 🔥 Yeni ekleme - duplicate check
+                            if (!_serviceIds.Contains(service.ServiceId))
+                            {
+                                InsertServiceSorted(service);
+                                _serviceIds.Add(service.ServiceId);
+                            }
+                        }
+                        hasChanges = true;
+                        break;
+
+                    case FirebaseEventType.Delete:
+                        if (existingService != null)
+                        {
+                            Services.Remove(existingService);
+                            _serviceIds.Remove(service.ServiceId);
+                            hasChanges = true;
+                        }
+                        break;
+                }
+            }
+
+            // 🔥 Sadece değişiklik varsa sırala
+            if (hasChanges)
+            {
+                SortServicesInPlace();
+            }
+        }
+
+        // 🔥 YENİ: Sıralı insert (en yeni üstte)
+        private void InsertServiceSorted(ServiceOffer service)
+        {
+            if (Services.Count == 0)
+            {
+                Services.Add(service);
+                return;
+            }
+
+            if (Services[0].CreatedAt <= service.CreatedAt)
+            {
+                Services.Insert(0, service);
+                return;
+            }
+
+            for (int i = 0; i < Services.Count; i++)
+            {
+                if (Services[i].CreatedAt < service.CreatedAt)
+                {
+                    Services.Insert(i, service);
+                    return;
+                }
+            }
+
+            Services.Add(service);
+        }
+
+        // 🔥 YENİ: In-place sorting
+        private void SortServicesInPlace()
+        {
+            var sorted = Services.OrderByDescending(s => s.CreatedAt).ToList();
+
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                var currentIndex = Services.IndexOf(sorted[i]);
+                if (currentIndex != i && currentIndex >= 0)
+                {
+                    Services.Move(currentIndex, i);
+                }
+            }
+        }
+
+        // 🔥 OPTİMİZE: Refresh command
+        [RelayCommand]
+        private async Task RefreshServicesAsync()
+        {
+            if (IsRefreshing) return;
+
+            try
+            {
+                IsRefreshing = true;
+
+                // Listener'ı durdur
+                _servicesSubscription?.Dispose();
+                _servicesSubscription = null;
+
+                // State'i sıfırla
+                _serviceIds.Clear();
+                Services.Clear();
+                _initialLoadComplete = false;
+
+                // Listener'ı yeniden başlat
+                StartListeningForServices();
+
+                await Task.Delay(300);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Refresh hatası: {ex.Message}");
+            }
+            finally
+            {
+                IsRefreshing = false;
+            }
         }
 
         [RelayCommand]
         private async Task LoadServicesAsync()
         {
-            try
+            // Real-time listener zaten çalışıyor, ek yükleme gerekmez
+            if (!_initialLoadComplete)
             {
                 IsLoading = true;
-                Services.Clear();
-                var result = await _serviceService.GetServiceOffersAsync();
-
-                if (result.Success && result.Data != null)
-                {
-                    foreach (var service in result.Data)
-                        Services.Add(service);
-                }
-            }
-            catch (Exception ex)
-            {
-                await Application.Current.MainPage.DisplayAlert("Hata", ex.Message, "Tamam");
-            }
-            finally
-            {
-                IsLoading = false;
             }
         }
 
@@ -77,7 +253,6 @@ namespace KamPay.ViewModels
         {
             try
             {
-                // 🟡 Giriş doğrulama
                 if (string.IsNullOrWhiteSpace(ServiceTitle) || string.IsNullOrWhiteSpace(ServiceDescription))
                 {
                     await Application.Current.MainPage.DisplayAlert("Uyarı", "Başlık ve açıklama gerekli.", "Tamam");
@@ -99,7 +274,6 @@ namespace KamPay.ViewModels
                     return;
                 }
 
-                // 🟢 Yeni hizmet oluşturuluyor (fiyat dahil)
                 var service = new ServiceOffer
                 {
                     ProviderId = currentUser.UserId,
@@ -116,7 +290,7 @@ namespace KamPay.ViewModels
 
                 if (result.Success && result.Data != null)
                 {
-                    Services.Insert(0, result.Data);
+                    // Real-time listener otomatik ekleyecek
 
                     // Formu sıfırla
                     ServiceTitle = string.Empty;
@@ -141,7 +315,6 @@ namespace KamPay.ViewModels
             }
         }
 
-        // --- HİZMET TALEP KOMUTU ---
         [RelayCommand]
         private async Task RequestServiceAsync(ServiceOffer offer)
         {
@@ -154,7 +327,6 @@ namespace KamPay.ViewModels
                 return;
             }
 
-            // 🟡 Kullanıcının kendi hizmetini talep etmesini engelle
             if (offer.ProviderId == currentUser.UserId)
             {
                 await Application.Current.MainPage.DisplayAlert("Bilgi", "Kendi hizmetinizi talep edemezsiniz.", "Tamam");
@@ -194,6 +366,14 @@ namespace KamPay.ViewModels
             {
                 IsLoading = false;
             }
+        }
+
+        public void Dispose()
+        {
+            Console.WriteLine("🧹 ServiceSharingViewModel dispose ediliyor...");
+            _servicesSubscription?.Dispose();
+            _servicesSubscription = null;
+            _serviceIds.Clear();
         }
     }
 }

@@ -2,13 +2,14 @@
 using CommunityToolkit.Mvvm.Input;
 using Firebase.Database;
 using Firebase.Database.Query;
-using KamPay.Helpers; // Constants için
+using KamPay.Helpers;
 using KamPay.Models;
 using KamPay.Services;
 using System.Collections.ObjectModel;
-using System.Diagnostics; 
-using System.Linq; // FirstOrDefault için
-using System.Reactive.Linq; // AsObservable için
+using System.Diagnostics;
+using System.Linq;
+using System.Reactive.Linq;
+using Firebase.Database.Streaming;
 
 namespace KamPay.ViewModels
 {
@@ -16,9 +17,16 @@ namespace KamPay.ViewModels
     {
         private readonly IGoodDeedService _goodDeedService;
         private readonly IAuthenticationService _authService;
-        private readonly IUserProfileService _userProfileService; // Profil bilgisi için ekledik
+        private readonly IUserProfileService _userProfileService;
         private readonly FirebaseClient _firebaseClient;
-        private IDisposable _postsSubscription; // Gerçek zamanlı dinleyici
+
+        private IDisposable _postsSubscription;
+        private readonly Dictionary<string, IDisposable> _commentSubscriptions = new();
+        private readonly SemaphoreSlim _commentLock = new(1, 1);
+
+        // 🔥 CACHE: Post güncelleme tracker
+        private readonly Dictionary<string, GoodDeedPost> _postsCache = new();
+        private bool _initialLoadComplete = false;
 
         [ObservableProperty]
         private string newCommentText;
@@ -36,27 +44,19 @@ namespace KamPay.ViewModels
         private PostType selectedType;
 
         public ObservableCollection<GoodDeedPost> Posts { get; } = new();
-
         public List<PostType> PostTypes { get; } = Enum.GetValues(typeof(PostType)).Cast<PostType>().ToList();
 
-        public GoodDeedBoardViewModel(IGoodDeedService goodDeedService, IAuthenticationService authService, IUserProfileService userProfileService)
+        public GoodDeedBoardViewModel(
+            IGoodDeedService goodDeedService,
+            IAuthenticationService authService,
+            IUserProfileService userProfileService)
         {
             _goodDeedService = goodDeedService;
             _authService = authService;
-            _userProfileService = userProfileService; // Servisi ata
+            _userProfileService = userProfileService;
             _firebaseClient = new FirebaseClient(Constants.FirebaseRealtimeDbUrl);
-            // Gerçek zamanlı dinleyiciyi başlat
-            // Not: Bu metot artık `async void` DEĞİL.
-            // Sayfa açıldığında OnAppearing ile tetiklenmesi daha doğru olur,
-            // ama şimdilik bu şekilde bırakabiliriz. 
-            // Daha önceki desenimize uymak için bunu da komut yapabiliriz.
-            // StartListeningForPosts();
         }
 
-
-
-
-       
         [RelayCommand]
         private async Task CreatePostAsync()
         {
@@ -85,7 +85,7 @@ namespace KamPay.ViewModels
 
                 if (result.Success)
                 {
-                    Posts.Insert(0, result.Data);
+                    // Real-time listener otomatik ekleyecek
                     Title = string.Empty;
                     Description = string.Empty;
 
@@ -109,7 +109,7 @@ namespace KamPay.ViewModels
             {
                 var currentUser = await _authService.GetCurrentUserAsync();
                 await _goodDeedService.LikePostAsync(post.PostId, currentUser.UserId);
-                post.LikeCount++;
+                // Real-time listener otomatik güncelleyecek
             }
             catch { }
         }
@@ -133,7 +133,13 @@ namespace KamPay.ViewModels
 
                 if (result.Success)
                 {
-                    Posts.Remove(post);
+                    // Comment listener'ını temizle
+                    if (_commentSubscriptions.ContainsKey(post.PostId))
+                    {
+                        _commentSubscriptions[post.PostId].Dispose();
+                        _commentSubscriptions.Remove(post.PostId);
+                    }
+                    // Real-time listener otomatik kaldıracak
                 }
             }
             catch (Exception ex)
@@ -142,83 +148,163 @@ namespace KamPay.ViewModels
             }
         }
 
+        // 🔥 OPTİMİZE: Batch processing ile post listener
         public void StartListeningForPosts()
         {
             if (_postsSubscription != null) return;
 
             IsLoading = !Posts.Any();
+            Console.WriteLine("🔥 GoodDeed listener başlatılıyor...");
 
             _postsSubscription = _firebaseClient
                 .Child("good_deed_posts")
                 .AsObservable<GoodDeedPost>()
-                .Subscribe(async e =>
+                .Where(e => e.Object != null)
+                .Buffer(TimeSpan.FromMilliseconds(400)) // 🔥 400ms batch
+                .Where(batch => batch.Any())
+                .Subscribe(async events =>
                 {
                     var currentUser = await _authService.GetCurrentUserAsync();
+
                     await MainThread.InvokeOnMainThreadAsync(() =>
                     {
-                        var post = e.Object;
-                        post.PostId = e.Key;
-                        if (currentUser != null)
+                        try
                         {
-                            post.IsOwner = post.UserId == currentUser.UserId;
+                            ProcessPostBatch(events, currentUser);
                         }
-
-                        var existingPost = Posts.FirstOrDefault(p => p.PostId == post.PostId);
-
-                        if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
+                        catch (Exception ex)
                         {
-                            if (existingPost != null)
+                            Debug.WriteLine($"❌ Post batch hatası: {ex.Message}");
+                        }
+                        finally
+                        {
+                            if (!_initialLoadComplete)
                             {
-                                var index = Posts.IndexOf(existingPost);
-                                // --- DÜZELTME BAŞLANGICI ---
-                                // Arayüzün güncellemeyi fark etmesi için eski ilanı kaldırıp
-                                // güncel halini aynı pozisyona ekliyoruz.
-                                Posts.RemoveAt(index);
-                                Posts.Insert(index, post);
-
+                                _initialLoadComplete = true;
+                                IsLoading = false;
+                                Console.WriteLine("✅ İlk post yüklemesi tamamlandı");
                             }
-                            else
-                            {
-                                Posts.Insert(0, post); // Yeni ilanı başa ekle
-                            }
-                            StartListeningForComments(post);
-
-
                         }
-                        else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
-                        {
-                            if (existingPost != null) Posts.Remove(existingPost);
-                        }
-
-                        // Sıralama her ihtimale karşı korunabilir
-                        var sortedPosts = Posts.OrderByDescending(p => p.CreatedAt).ToList();
-                        Posts.Clear();
-                        foreach (var p in sortedPosts) Posts.Add(p);
-
-                        IsLoading = false;
                     });
                 }, ex =>
                 {
-                    Debug.WriteLine($"[HATA] İyilik Panosu dinlenirken sorun oluştu: {ex.Message}");
+                    Debug.WriteLine($"❌ İyilik Panosu listener hatası: {ex.Message}");
                     MainThread.InvokeOnMainThreadAsync(() => IsLoading = false);
                 });
         }
 
-        public void StopListening()
+        // 🔥 YENİ: Batch processing - Clear() YOK
+        private void ProcessPostBatch(IList<FirebaseEvent<GoodDeedPost>> events, User currentUser)
         {
-            _postsSubscription?.Dispose();
-            _postsSubscription = null;
+            bool hasChanges = false;
 
-            foreach (var sub in _commentSubscriptions.Values)
-                sub.Dispose();
+            foreach (var e in events)
+            {
+                var post = e.Object;
+                post.PostId = e.Key;
 
-            _commentSubscriptions.Clear();
+                if (currentUser != null)
+                {
+                    post.IsOwner = post.UserId == currentUser.UserId;
+                }
 
+                var existingPost = Posts.FirstOrDefault(p => p.PostId == post.PostId);
+
+                switch (e.EventType)
+                {
+                    case FirebaseEventType.InsertOrUpdate:
+                        if (existingPost != null)
+                        {
+                            // Güncelleme - pozisyonu koru
+                            var index = Posts.IndexOf(existingPost);
+
+                            // 🔥 Comment'leri koru
+                            if (existingPost.Comments != null && post.Comments == null)
+                            {
+                                post.Comments = existingPost.Comments;
+                                post.CommentCount = existingPost.CommentCount;
+                            }
+
+                            Posts[index] = post;
+                            _postsCache[post.PostId] = post;
+                        }
+                        else
+                        {
+                            // Yeni post - sıralı ekle
+                            InsertPostSorted(post);
+                            _postsCache[post.PostId] = post;
+
+                            // Comment listener başlat
+                            StartListeningForComments(post);
+                        }
+                        hasChanges = true;
+                        break;
+
+                    case FirebaseEventType.Delete:
+                        if (existingPost != null)
+                        {
+                            Posts.Remove(existingPost);
+                            _postsCache.Remove(post.PostId);
+
+                            // Comment listener'ı temizle
+                            if (_commentSubscriptions.ContainsKey(post.PostId))
+                            {
+                                _commentSubscriptions[post.PostId].Dispose();
+                                _commentSubscriptions.Remove(post.PostId);
+                            }
+                            hasChanges = true;
+                        }
+                        break;
+                }
+            }
+
+            // 🔥 Sadece değişiklik varsa sırala
+            if (hasChanges)
+            {
+                SortPostsInPlace();
+            }
         }
 
-        public void Dispose()
+        // 🔥 YENİ: Sıralı insert (en yeni üstte)
+        private void InsertPostSorted(GoodDeedPost post)
         {
-            StopListening();
+            if (Posts.Count == 0)
+            {
+                Posts.Add(post);
+                return;
+            }
+
+            if (Posts[0].CreatedAt <= post.CreatedAt)
+            {
+                Posts.Insert(0, post);
+                return;
+            }
+
+            for (int i = 0; i < Posts.Count; i++)
+            {
+                if (Posts[i].CreatedAt < post.CreatedAt)
+                {
+                    Posts.Insert(i, post);
+                    return;
+                }
+            }
+
+            Posts.Add(post);
+        }
+
+        // 🔥 YENİ: In-place sorting
+        private void SortPostsInPlace()
+        {
+            var sorted = Posts.OrderByDescending(p => p.CreatedAt).ToList();
+
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                var currentIndex = Posts.IndexOf(sorted[i]);
+                if (currentIndex != i)
+                {
+                    Posts.Move(currentIndex, i);
+                }
+            }
         }
 
         [RelayCommand]
@@ -247,23 +333,7 @@ namespace KamPay.ViewModels
             if (result.Success)
             {
                 NewCommentText = string.Empty;
-
-                // 🌟 UI’yi anında güncelle
-                await MainThread.InvokeOnMainThreadAsync(() =>
-                {
-                    post.Comments ??= new Dictionary<string, Comment>();
-                    post.Comments[comment.CommentId] = comment;
-                    post.CommentCount = post.Comments.Count;
-
-                    // ObservableCollection içindeki post'u yenile
-                    var existing = Posts.FirstOrDefault(p => p.PostId == post.PostId);
-                    if (existing != null)
-                    {
-                        var index = Posts.IndexOf(existing);
-                        Posts.RemoveAt(index);
-                        Posts.Insert(index, post);
-                    }
-                });
+                // Real-time comment listener otomatik güncelleyecek
             }
             else
             {
@@ -271,10 +341,7 @@ namespace KamPay.ViewModels
             }
         }
 
-        private readonly Dictionary<string, IDisposable> _commentSubscriptions = new();
-
-        private readonly SemaphoreSlim _commentLock = new(1, 1);
-
+        // 🔥 OPTİMİZE: Comment listener - batch processing
         public void StartListeningForComments(GoodDeedPost post)
         {
             if (_commentSubscriptions.ContainsKey(post.PostId))
@@ -285,38 +352,17 @@ namespace KamPay.ViewModels
                 .Child(post.PostId)
                 .Child("Comments")
                 .AsObservable<Comment>()
-                .Subscribe(async e =>
+                .Where(e => e.Object != null && !string.IsNullOrEmpty(e.Key))
+                .Buffer(TimeSpan.FromMilliseconds(300)) // 🔥 300ms batch
+                .Where(batch => batch.Any())
+                .Subscribe(async events =>
                 {
                     await _commentLock.WaitAsync();
                     try
                     {
-                        if (e.Object == null || string.IsNullOrEmpty(e.Key))
-                            return;
-
                         await MainThread.InvokeOnMainThreadAsync(() =>
                         {
-                            post.Comments ??= new Dictionary<string, Comment>();
-
-                            if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
-                            {
-                                post.Comments[e.Key] = e.Object;
-                            }
-                            else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
-                            {
-                                if (post.Comments.ContainsKey(e.Key))
-                                    post.Comments.Remove(e.Key);
-                            }
-
-                            post.CommentCount = post.Comments.Count;
-
-                            // 🧩 Arayüz binding’ini yenilemek için post’u ObservableCollection’a tekrar ekle
-                            var existing = Posts.FirstOrDefault(p => p.PostId == post.PostId);
-                            if (existing != null)
-                            {
-                                var index = Posts.IndexOf(existing);
-                                Posts.RemoveAt(index);
-                                Posts.Insert(index, post);
-                            }
+                            ProcessCommentBatch(post, events);
                         });
                     }
                     finally
@@ -328,6 +374,63 @@ namespace KamPay.ViewModels
             _commentSubscriptions[post.PostId] = subscription;
         }
 
+        // 🔥 YENİ: Comment batch processing
+        private void ProcessCommentBatch(GoodDeedPost post, IList<FirebaseEvent<Comment>> events)
+        {
+            post.Comments ??= new Dictionary<string, Comment>();
+            bool hasChanges = false;
 
+            foreach (var e in events)
+            {
+                switch (e.EventType)
+                {
+                    case FirebaseEventType.InsertOrUpdate:
+                        post.Comments[e.Key] = e.Object;
+                        hasChanges = true;
+                        break;
+
+                    case FirebaseEventType.Delete:
+                        if (post.Comments.ContainsKey(e.Key))
+                        {
+                            post.Comments.Remove(e.Key);
+                            hasChanges = true;
+                        }
+                        break;
+                }
+            }
+
+            if (hasChanges)
+            {
+                post.CommentCount = post.Comments.Count;
+
+                // 🔥 UI binding'ini yenile (ObservableCollection pattern)
+                var existingPost = Posts.FirstOrDefault(p => p.PostId == post.PostId);
+                if (existingPost != null)
+                {
+                    var index = Posts.IndexOf(existingPost);
+                    Posts[index] = post;
+                }
+            }
+        }
+
+        public void StopListening()
+        {
+            _postsSubscription?.Dispose();
+            _postsSubscription = null;
+
+            foreach (var sub in _commentSubscriptions.Values)
+                sub.Dispose();
+
+            _commentSubscriptions.Clear();
+            _postsCache.Clear();
+            _initialLoadComplete = false;
+
+            Console.WriteLine("🧹 GoodDeed listeners temizlendi");
+        }
+
+        public void Dispose()
+        {
+            StopListening();
+        }
     }
 }

@@ -19,11 +19,13 @@ namespace KamPay.ViewModels
     {
         private readonly ITransactionService _transactionService;
         private readonly IAuthenticationService _authService;
-        private IDisposable _incomingOffersSubscription;
-        private IDisposable _outgoingOffersSubscription;
+        private IDisposable _allOffersSubscription;
         private readonly FirebaseClient _firebaseClient;
 
-        // 🔥 YENİ: İlk yükleme kontrolü
+        // 🔥 CACHE: Duplicate prevention
+        private readonly HashSet<string> _incomingIds = new();
+        private readonly HashSet<string> _outgoingIds = new();
+
         private bool _incomingInitialLoadComplete = false;
         private bool _outgoingInitialLoadComplete = false;
 
@@ -51,7 +53,6 @@ namespace KamPay.ViewModels
             _ = InitializeAsync();
         }
 
-        // 🔥 YENİ: Async initialization
         private async Task InitializeAsync()
         {
             IsLoading = true;
@@ -66,19 +67,21 @@ namespace KamPay.ViewModels
             StartListeningForOffers(currentUser.UserId);
         }
 
-        // 🔥 OPTIMIZE: Client-side filtering (Firebase.Database.net limitasyonu nedeniyle)
+        // 🔥 OPTİMİZE: Tek subscription, batch processing
         private void StartListeningForOffers(string userId)
         {
-            Console.WriteLine($"🔥 Real-time listener başlatılıyor: {userId}");
+            Console.WriteLine($"🔥 Offers listener başlatılıyor: {userId}");
 
             IncomingOffers.Clear();
             OutgoingOffers.Clear();
+            _incomingIds.Clear();
+            _outgoingIds.Clear();
 
-            // 🔹 TÜM teklifleri dinle, client-side filtrele (Firebase.Database.net API limitasyonu)
-            var allOffersSubscription = _firebaseClient
+            _allOffersSubscription = _firebaseClient
                 .Child(Constants.TransactionsCollection)
                 .AsObservable<Transaction>()
-                .Buffer(TimeSpan.FromMilliseconds(200)) // 🔥 200ms buffer
+                .Where(e => e.Object != null)
+                .Buffer(TimeSpan.FromMilliseconds(300)) // 🔥 300ms batch
                 .Where(batch => batch.Any())
                 .Subscribe(
                     events =>
@@ -87,42 +90,15 @@ namespace KamPay.ViewModels
                         {
                             try
                             {
-                                // Her event'i kontrol et ve uygun listeye ekle
-                                foreach (var e in events)
-                                {
-                                    if (e.Object == null) continue;
-
-                                    var transaction = e.Object;
-                                    transaction.TransactionId = e.Key;
-
-                                    // Gelen teklif mi? (ben satıcıyım)
-                                    if (transaction.SellerId == userId)
-                                    {
-                                        UpdateOfferInCollection(IncomingOffers, transaction, e.EventType);
-                                    }
-                                    // Giden teklif mi? (ben alıcıyım)
-                                    else if (transaction.BuyerId == userId)
-                                    {
-                                        UpdateOfferInCollection(OutgoingOffers, transaction, e.EventType);
-                                    }
-                                }
-
-                                // İlk yükleme tamamlandı
-                                if (!_incomingInitialLoadComplete)
-                                {
-                                    _incomingInitialLoadComplete = true;
-                                    CheckAndHideLoading();
-                                }
-
-                                if (!_outgoingInitialLoadComplete)
-                                {
-                                    _outgoingInitialLoadComplete = true;
-                                    CheckAndHideLoading();
-                                }
+                                ProcessOfferBatch(events, userId);
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"❌ Offer processing hatası: {ex.Message}");
+                                Console.WriteLine($"❌ Offer batch hatası: {ex.Message}");
+                            }
+                            finally
+                            {
+                                CheckAndHideLoading();
                             }
                         });
                     },
@@ -131,15 +107,57 @@ namespace KamPay.ViewModels
                         Console.WriteLine($"❌ Firebase listener hatası: {error.Message}");
                         MainThread.BeginInvokeOnMainThread(() => IsLoading = false);
                     });
-
-            // Her iki subscription'ı aynı observer'a bağla
-            _incomingOffersSubscription = allOffersSubscription;
-            _outgoingOffersSubscription = allOffersSubscription;
         }
 
-        // 🔥 YENİ: Tek bir transaction'ı uygun listeye ekle/güncelle
-        private void UpdateOfferInCollection(
+        // 🔥 OPTİMİZE: Smart batch processing
+        private void ProcessOfferBatch(IList<FirebaseEvent<Transaction>> events, string userId)
+        {
+            bool hasIncomingChanges = false;
+            bool hasOutgoingChanges = false;
+
+            foreach (var e in events)
+            {
+                if (e.Object == null) continue;
+
+                var transaction = e.Object;
+                transaction.TransactionId = e.Key;
+
+                // Gelen teklif mi? (ben satıcıyım)
+                if (transaction.SellerId == userId)
+                {
+                    if (UpdateOfferInCollection(IncomingOffers, _incomingIds, transaction, e.EventType))
+                    {
+                        hasIncomingChanges = true;
+                    }
+                }
+                // Giden teklif mi? (ben alıcıyım)
+                else if (transaction.BuyerId == userId)
+                {
+                    if (UpdateOfferInCollection(OutgoingOffers, _outgoingIds, transaction, e.EventType))
+                    {
+                        hasOutgoingChanges = true;
+                    }
+                }
+            }
+
+            // 🔥 Sadece değişenler için sıralama
+            if (hasIncomingChanges)
+            {
+                SortOffersInPlace(IncomingOffers);
+                _incomingInitialLoadComplete = true;
+            }
+
+            if (hasOutgoingChanges)
+            {
+                SortOffersInPlace(OutgoingOffers);
+                _outgoingInitialLoadComplete = true;
+            }
+        }
+
+        // 🔥 YENİ: Tek bir transaction'ı güncelle (duplicate check)
+        private bool UpdateOfferInCollection(
             ObservableCollection<Transaction> collection,
+            HashSet<string> idTracker,
             Transaction transaction,
             FirebaseEventType eventType)
         {
@@ -150,25 +168,51 @@ namespace KamPay.ViewModels
                 case FirebaseEventType.InsertOrUpdate:
                     if (existing != null)
                     {
-                        // Mevcut pozisyonda güncelle
+                        // Güncelleme
                         var index = collection.IndexOf(existing);
                         collection[index] = transaction;
+                        return true;
                     }
                     else
                     {
-                        // Yeni teklif ekle (zaman sırasına göre)
-                        InsertOfferSorted(collection, transaction);
+                        // 🔥 Duplicate check
+                        if (!idTracker.Contains(transaction.TransactionId))
+                        {
+                            collection.Add(transaction);
+                            idTracker.Add(transaction.TransactionId);
+                            return true;
+                        }
                     }
                     break;
 
                 case FirebaseEventType.Delete:
                     if (existing != null)
+                    {
                         collection.Remove(existing);
+                        idTracker.Remove(transaction.TransactionId);
+                        return true;
+                    }
                     break;
+            }
+
+            return false;
+        }
+
+        // 🔥 YENİ: In-place sorting
+        private void SortOffersInPlace(ObservableCollection<Transaction> collection)
+        {
+            var sorted = collection.OrderByDescending(t => t.CreatedAt).ToList();
+
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                var currentIndex = collection.IndexOf(sorted[i]);
+                if (currentIndex != i && currentIndex >= 0)
+                {
+                    collection.Move(currentIndex, i);
+                }
             }
         }
 
-        // 🔥 YENİ: Her iki listener da tamamlandığında loading'i kapat
         private void CheckAndHideLoading()
         {
             if (_incomingInitialLoadComplete && _outgoingInitialLoadComplete)
@@ -178,39 +222,7 @@ namespace KamPay.ViewModels
             }
         }
 
-
-
-        // 🔥 YENİ: Teklifleri zaman sırasına göre ekle (en yeni üstte)
-        private void InsertOfferSorted(ObservableCollection<Transaction> collection, Transaction newOffer)
-        {
-            if (collection.Count == 0)
-            {
-                collection.Add(newOffer);
-                return;
-            }
-
-            // En yeni teklif en üstte olmalı
-            if (collection[0].CreatedAt <= newOffer.CreatedAt)
-            {
-                collection.Insert(0, newOffer);
-                return;
-            }
-
-            // Doğru pozisyonu bul
-            for (int i = 0; i < collection.Count; i++)
-            {
-                if (collection[i].CreatedAt < newOffer.CreatedAt)
-                {
-                    collection.Insert(i, newOffer);
-                    return;
-                }
-            }
-
-            // En eskiyse en sona ekle
-            collection.Add(newOffer);
-        }
-
-        // 🔥 OPTIMIZE: Refresh Command
+        // 🔥 OPTİMİZE: Refresh Command
         [RelayCommand]
         private async Task RefreshOffersAsync()
         {
@@ -220,13 +232,14 @@ namespace KamPay.ViewModels
             {
                 IsRefreshing = true;
 
-                // Listener'ları durdur
-                _incomingOffersSubscription?.Dispose();
-                _outgoingOffersSubscription?.Dispose();
+                // Listener'ı durdur
+                _allOffersSubscription?.Dispose();
 
                 // State'i sıfırla
                 _incomingInitialLoadComplete = false;
                 _outgoingInitialLoadComplete = false;
+                _incomingIds.Clear();
+                _outgoingIds.Clear();
                 IncomingOffers.Clear();
                 OutgoingOffers.Clear();
 
@@ -234,11 +247,10 @@ namespace KamPay.ViewModels
                 var currentUser = await _authService.GetCurrentUserAsync();
                 if (currentUser != null)
                 {
-                    // Listener'ları yeniden başlat
                     StartListeningForOffers(currentUser.UserId);
                 }
 
-                await Task.Delay(300); // UI için kısa gecikme
+                await Task.Delay(300);
             }
             catch (Exception ex)
             {
@@ -428,10 +440,10 @@ namespace KamPay.ViewModels
         public void Dispose()
         {
             Console.WriteLine("🧹 OffersViewModel dispose ediliyor...");
-            _incomingOffersSubscription?.Dispose();
-            _outgoingOffersSubscription?.Dispose();
-            _incomingOffersSubscription = null;
-            _outgoingOffersSubscription = null;
+            _allOffersSubscription?.Dispose();
+            _allOffersSubscription = null;
+            _incomingIds.Clear();
+            _outgoingIds.Clear();
         }
     }
 }

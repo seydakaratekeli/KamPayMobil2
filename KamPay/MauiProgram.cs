@@ -1,11 +1,12 @@
-﻿using Microsoft.Extensions.Logging;
-using CommunityToolkit.Maui;
+﻿using CommunityToolkit.Maui;
+using CommunityToolkit.Maui.Core;
+using FFImageLoading.Maui;
 using KamPay.Services;
 using KamPay.ViewModels;
 using KamPay.Views;
+using Microsoft.Extensions.Logging;
 using ZXing.Net.Maui;
 using ZXing.Net.Maui.Controls;
-using CommunityToolkit.Maui.Core;
 
 namespace KamPay
 {
@@ -20,6 +21,8 @@ namespace KamPay
 
                 .UseBarcodeReader()
                 .UseMauiCommunityToolkit()
+                            .UseFFImageLoading() // ✅ BURAYA EKLE
+
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -67,6 +70,9 @@ namespace KamPay
                 new FirebaseQRCodeService(sp.GetRequiredService<IUserProfileService>())
             );
 
+            // ✅ SERVICES BÖLÜMÜNE EKLE (mevcut satırlardan sonra)
+            builder.Services.AddSingleton<IFirebaseObserverService, FirebaseObserverService>();
+            builder.Services.AddSingleton<IProductCacheService, ProductCacheService>();
             builder.Services.AddSingleton<IReverseGeocodeService, ReverseGeocodeService>();
             builder.Services.AddSingleton<ISurpriseBoxService, FirebaseSurpriseBoxService>();
             builder.Services.AddSingleton<IGoodDeedService, FirebaseGoodDeedService>();

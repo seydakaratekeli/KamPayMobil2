@@ -24,11 +24,14 @@ namespace KamPay.ViewModels
         private User _currentUser;
         private bool _isInitialized = false;
 
+        // 🔥 CACHE: Conversation ID tracker (중복 방지)
+        private readonly HashSet<string> _conversationIds = new();
+
         [ObservableProperty]
         private bool isLoading = true;
 
         [ObservableProperty]
-        private bool isRefreshing = false; // 🔥 YENİ: RefreshView için
+        private bool isRefreshing = false;
 
         [ObservableProperty]
         private int unreadCount;
@@ -44,7 +47,7 @@ namespace KamPay.ViewModels
             _authService = authService;
         }
 
-        // 🔥 OPTIMIZE: İlk yükleme sadece bir kez
+        // 🔥 İlk yükleme sadece bir kez
         public async Task InitializeAsync()
         {
             if (_isInitialized) return;
@@ -61,7 +64,6 @@ namespace KamPay.ViewModels
                     return;
                 }
 
-                // 🔥 SADECE listener başlat (hem ilk yükleme hem real-time)
                 StartListeningForConversations();
                 _isInitialized = true;
             }
@@ -73,7 +75,7 @@ namespace KamPay.ViewModels
             }
         }
 
-        // 🔥 OPTIMIZE: Verimsiz Clear() + Add() yerine akıllı güncelleme
+        // 🔥 OPTİMİZE: Batch processing + HashSet中복 체크
         private void StartListeningForConversations()
         {
             if (_currentUser == null)
@@ -82,7 +84,7 @@ namespace KamPay.ViewModels
                 return;
             }
 
-            Console.WriteLine("🔥 Real-time listener başlatılıyor...");
+            Console.WriteLine("🔥 Conversations listener başlatılıyor...");
 
             _conversationsSubscription = _firebaseClient
                 .Child(Constants.ConversationsCollection)
@@ -90,7 +92,7 @@ namespace KamPay.ViewModels
                 .Where(e => e.Object != null &&
                            e.Object.IsActive &&
                            (e.Object.User1Id == _currentUser.UserId || e.Object.User2Id == _currentUser.UserId))
-                .Buffer(TimeSpan.FromMilliseconds(300)) // 🔥 YENİ: 300ms içindeki tüm değişiklikleri topla
+                .Buffer(TimeSpan.FromMilliseconds(250)) // 🔥 250ms batch (daha kısa, mesajlar critical)
                 .Where(batch => batch.Any())
                 .Subscribe(
                     events =>
@@ -103,7 +105,7 @@ namespace KamPay.ViewModels
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"❌ Conversation update hatası: {ex.Message}");
+                                Console.WriteLine($"❌ Conversation batch hatası: {ex.Message}");
                             }
                             finally
                             {
@@ -124,7 +126,7 @@ namespace KamPay.ViewModels
                     });
         }
 
-        // 🔥 YENİ: Batch işleme (Clear() yerine akıllı güncelleme)
+        // 🔥 OPTİMİZE: Duplicate check + Smart update
         private void ProcessConversationBatch(IList<Firebase.Database.Streaming.FirebaseEvent<Conversation>> events)
         {
             bool hasChanges = false;
@@ -139,32 +141,39 @@ namespace KamPay.ViewModels
 
                 var existingConvo = Conversations.FirstOrDefault(c => c.ConversationId == conversation.ConversationId);
 
-                if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate)
+                switch (e.EventType)
                 {
-                    if (existingConvo != null)
-                    {
-                        // ✅ Mevcut öğeyi güncelle (Clear() YOK)
-                        var index = Conversations.IndexOf(existingConvo);
-                        Conversations[index] = conversation;
-                    }
-                    else
-                    {
-                        // ✅ Yeni öğe ekle
-                        Conversations.Add(conversation);
-                    }
-                    hasChanges = true;
-                }
-                else if (e.EventType == Firebase.Database.Streaming.FirebaseEventType.Delete)
-                {
-                    if (existingConvo != null)
-                    {
-                        Conversations.Remove(existingConvo);
+                    case Firebase.Database.Streaming.FirebaseEventType.InsertOrUpdate:
+                        if (existingConvo != null)
+                        {
+                            // 🔥 Güncelleme - pozisyonu koru (sorting sonra yapılacak)
+                            var index = Conversations.IndexOf(existingConvo);
+                            Conversations[index] = conversation;
+                        }
+                        else
+                        {
+                            // 🔥 Yeni ekleme - duplicate check
+                            if (!_conversationIds.Contains(conversation.ConversationId))
+                            {
+                                Conversations.Add(conversation);
+                                _conversationIds.Add(conversation.ConversationId);
+                            }
+                        }
                         hasChanges = true;
-                    }
+                        break;
+
+                    case Firebase.Database.Streaming.FirebaseEventType.Delete:
+                        if (existingConvo != null)
+                        {
+                            Conversations.Remove(existingConvo);
+                            _conversationIds.Remove(conversation.ConversationId);
+                            hasChanges = true;
+                        }
+                        break;
                 }
             }
 
-            // 🔥 SADECE değişiklik varsa sırala (Clear() YOK)
+            // 🔥 Sadece değişiklik varsa sırala + unread güncelle
             if (hasChanges)
             {
                 SortConversationsInPlace();
@@ -173,31 +182,29 @@ namespace KamPay.ViewModels
             }
         }
 
-        // 🔥 YENİ: In-place sorting (Clear() + Add() yerine)
+        // 🔥 OPTİMİZE: In-place sorting (Clear() YOK)
         private void SortConversationsInPlace()
         {
-            // ObservableCollection'ı sıralamak için geçici liste kullan
             var sorted = Conversations.OrderByDescending(c => c.LastMessageTime).ToList();
 
-            // Sadece sıra değişenler için Move() kullan
             for (int i = 0; i < sorted.Count; i++)
             {
                 var currentIndex = Conversations.IndexOf(sorted[i]);
-                if (currentIndex != i)
+                if (currentIndex != i && currentIndex >= 0)
                 {
                     Conversations.Move(currentIndex, i);
                 }
             }
         }
 
-        // 🔥 YENİ: Okunmamış sayıyı güncelle
+        // 🔥 Unread count güncelle
         private void UpdateUnreadCount()
         {
             UnreadCount = Conversations.Sum(c => c.UnreadCount);
             WeakReferenceMessenger.Default.Send(new UnreadMessageStatusMessage(UnreadCount > 0));
         }
 
-        // 🔥 YENİ: Pull-to-Refresh Command
+        // 🔥 Pull-to-Refresh Command
         [RelayCommand]
         private async Task RefreshConversationsAsync()
         {
@@ -212,15 +219,8 @@ namespace KamPay.ViewModels
 
                 if (result.Success && result.Data != null)
                 {
-                    Conversations.Clear();
-
-                    foreach (var convo in result.Data)
-                    {
-                        convo.OtherUserName = convo.GetOtherUserName(_currentUser.UserId);
-                        convo.OtherUserPhotoUrl = convo.GetOtherUserPhotoUrl(_currentUser.UserId);
-                        convo.UnreadCount = convo.GetUnreadCount(_currentUser.UserId);
-                        Conversations.Add(convo);
-                    }
+                    // 🔥 Smart update
+                    UpdateConversationsFromRefresh(result.Data);
 
                     UpdateUnreadCount();
                     EmptyMessage = Conversations.Any() ? string.Empty : "Henüz mesajınız yok.";
@@ -241,6 +241,53 @@ namespace KamPay.ViewModels
             {
                 IsRefreshing = false;
             }
+        }
+
+        // 🔥 YENİ: Refresh'ten gelen data ile smart update
+        private void UpdateConversationsFromRefresh(List<Conversation> freshData)
+        {
+            // 1️⃣ Silinmesi gerekenler
+            for (int i = Conversations.Count - 1; i >= 0; i--)
+            {
+                if (!freshData.Any(c => c.ConversationId == Conversations[i].ConversationId))
+                {
+                    _conversationIds.Remove(Conversations[i].ConversationId);
+                    Conversations.RemoveAt(i);
+                }
+            }
+
+            // 2️⃣ Güncellenecek veya eklenecekler
+            foreach (var freshConvo in freshData)
+            {
+                freshConvo.OtherUserName = freshConvo.GetOtherUserName(_currentUser.UserId);
+                freshConvo.OtherUserPhotoUrl = freshConvo.GetOtherUserPhotoUrl(_currentUser.UserId);
+                freshConvo.UnreadCount = freshConvo.GetUnreadCount(_currentUser.UserId);
+
+                var existingIndex = -1;
+                for (int i = 0; i < Conversations.Count; i++)
+                {
+                    if (Conversations[i].ConversationId == freshConvo.ConversationId)
+                    {
+                        existingIndex = i;
+                        break;
+                    }
+                }
+
+                if (existingIndex >= 0)
+                {
+                    // Güncelleme
+                    Conversations[existingIndex] = freshConvo;
+                }
+                else
+                {
+                    // Yeni ekleme
+                    Conversations.Add(freshConvo);
+                    _conversationIds.Add(freshConvo.ConversationId);
+                }
+            }
+
+            // 3️⃣ Sıralama
+            SortConversationsInPlace();
         }
 
         [RelayCommand]
@@ -285,6 +332,7 @@ namespace KamPay.ViewModels
             Console.WriteLine("🧹 MessagesViewModel dispose ediliyor...");
             _conversationsSubscription?.Dispose();
             _conversationsSubscription = null;
+            _conversationIds.Clear();
             _isInitialized = false;
         }
     }

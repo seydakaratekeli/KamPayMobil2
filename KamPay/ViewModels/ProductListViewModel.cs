@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+ï»¿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using KamPay.Models;
@@ -7,7 +7,7 @@ using KamPay.Views;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics; // Hata ayýklama için eklendi
+using System.Diagnostics; // Hata ayÄ±klama iÃ§in eklendi
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -22,20 +22,24 @@ namespace KamPay.ViewModels
     {
         private readonly IProductService _productService;
         private readonly IAuthenticationService _authService;
-        private readonly ICategoryService _categoryService; // DOÐRU SERVÝS EKLENDÝ
+        private readonly ICategoryService _categoryService; // DOÄžRU SERVÄ°S EKLENDÄ°
         private IDisposable _notificationSubscription;
         private IDisposable _productSubscription;
         private readonly FirebaseClient _firebaseClient = new(Constants.FirebaseRealtimeDbUrl);
-        private CancellationTokenSource _searchCancellationTokenSource; // YENÝ EKLENDÝ
+        private CancellationTokenSource _searchCancellationTokenSource; // YENÄ° EKLENDÄ°
+        private readonly CacheManager<List<Product>> _cacheManager = new();
+        private const string CACHE_KEY = "all_products";                                                               // âœ… YENÄ° METOD EKLE - Sonsuz scroll iÃ§in
+        private string _lastLoadedKey;
+        private bool _isLoadingMore;
 
-        // Tüm ürünlerin tutulduðu ana liste (filtreleme için)
+        // TÃ¼m Ã¼rÃ¼nlerin tutulduÄŸu ana liste (filtreleme iÃ§in)
         private List<Product> _allProducts = new();
 
-        // Arayüze baðlanan ve sadece filtrelenmiþ ürünleri gösteren liste
+        // ArayÃ¼ze baÄŸlanan ve sadece filtrelenmiÅŸ Ã¼rÃ¼nleri gÃ¶steren liste
         public ObservableCollection<Product> Products { get; } = new();
         public ObservableCollection<Category> Categories { get; } = new();
 
-        #region Observable Properties (Arayüzle Ýletiþim Kuran Özellikler)
+        #region Observable Properties (ArayÃ¼zle Ä°letiÅŸim Kuran Ã–zellikler)
         [ObservableProperty] private string userId;
         [ObservableProperty] private bool isLoading = true;
         [ObservableProperty] private bool hasUnreadNotifications;
@@ -44,7 +48,7 @@ namespace KamPay.ViewModels
         [ObservableProperty] private ProductType? selectedType;
         [ObservableProperty] private ProductSortOption selectedSortOption;
         [ObservableProperty] private bool showFilterPanel;
-        [ObservableProperty] private string emptyMessage = "Henüz ürün eklenmemiþ";
+        [ObservableProperty] private string emptyMessage = "HenÃ¼z Ã¼rÃ¼n eklenmemiÅŸ";
         [ObservableProperty] private bool _isRefreshing;
 
         #endregion
@@ -55,7 +59,7 @@ namespace KamPay.ViewModels
         {
             _productService = productService;
             _authService = authService;
-            _categoryService = categoryService; // Gelen servisi atayýn
+            _categoryService = categoryService; // Gelen servisi atayÄ±n
             SelectedSortOption = ProductSortOption.Newest;
 
             WeakReferenceMessenger.Default.Register<FavoriteCountChangedMessage>(this, (r, m) =>
@@ -68,6 +72,7 @@ namespace KamPay.ViewModels
             InitializeViewModel();
         }
 
+
         public async void InitializeViewModel()
         {
             await LoadCategoriesAsync();
@@ -79,7 +84,7 @@ namespace KamPay.ViewModels
             }
         }
 
-        #region Veri Yükleme ve Filtreleme Mantýðý
+        #region Veri YÃ¼kleme ve Filtreleme MantÄ±ÄŸÄ±
 
         async partial void OnUserIdChanged(string value)
         {
@@ -90,7 +95,7 @@ namespace KamPay.ViewModels
             if (!string.IsNullOrEmpty(value))
             {
                 IsLoading = true;
-                EmptyMessage = "Henüz ürün eklemediniz";
+                EmptyMessage = "HenÃ¼z Ã¼rÃ¼n eklemediniz";
                 var result = await _productService.GetUserProductsAsync(value);
                 if (result.Success && result.Data != null)
                 {
@@ -101,15 +106,15 @@ namespace KamPay.ViewModels
             }
             else
             {
-                EmptyMessage = "Arama kriterlerinize uygun ürün bulunamadý";
+                EmptyMessage = "Arama kriterlerinize uygun Ã¼rÃ¼n bulunamadÄ±";
                 StartListeningForProducts();
             }
         }
 
         private void StartListeningForProducts()
         {
-            // ÇÖZÜM: Sadece ana ürün listesi boþsa yükleme animasyonunu göster.
-            // Bu, sadece ilk yüklemede veya filtre tamamen boþaldýðýnda çalýþýr.
+            // Ã‡Ã–ZÃœM: Sadece ana Ã¼rÃ¼n listesi boÅŸsa yÃ¼kleme animasyonunu gÃ¶ster.
+            // Bu, sadece ilk yÃ¼klemede veya filtre tamamen boÅŸaldÄ±ÄŸÄ±nda Ã§alÄ±ÅŸÄ±r.
             if (!_allProducts.Any())
             {
                 IsLoading = true;
@@ -117,15 +122,15 @@ namespace KamPay.ViewModels
 
             _productSubscription?.Dispose();
             // NOT: _allProducts listesini burada temizlemiyoruz.
-            // Çünkü geri dönüldüðünde eski veriyi göstermek istiyoruz.
-            // Dinleyici yeni verileri getirdikçe liste güncellenecektir.
+            // Ã‡Ã¼nkÃ¼ geri dÃ¶nÃ¼ldÃ¼ÄŸÃ¼nde eski veriyi gÃ¶stermek istiyoruz.
+            // Dinleyici yeni verileri getirdikÃ§e liste gÃ¼ncellenecektir.
 
             _productSubscription = _firebaseClient
                 .Child(Constants.ProductsCollection)
                 .AsObservable<Product>()
                 .Subscribe(e =>
                 {
-                    // Hata Ayýklama Mesajý
+                    // Hata AyÄ±klama MesajÄ±
                     Debug.WriteLine($"[DEBUG] Firebase Event: {e.EventType}, Key: {e.Key}");
 
                     MainThread.BeginInvokeOnMainThread(() =>
@@ -157,13 +162,13 @@ namespace KamPay.ViewModels
                 }, ex => {
                     if (ex is TimeoutException)
                     {
-                        Debug.WriteLine("[DEBUG] Firebase dinleyicisi zaman aþýmýna uðradý.");
+                        Debug.WriteLine("[DEBUG] Firebase dinleyicisi zaman aÅŸÄ±mÄ±na uÄŸradÄ±.");
                     }
                     else
                     {
                         Debug.WriteLine($"[HATA] Firebase dinleyicisinde sorun: {ex.Message}");
                     }
-                    // Her durumda yükleme animasyonunu kapat
+                    // Her durumda yÃ¼kleme animasyonunu kapat
                     MainThread.BeginInvokeOnMainThread(() => { IsLoading = false; });
                 });
         }
@@ -205,27 +210,27 @@ namespace KamPay.ViewModels
                 Products.Add(product);
             }
 
-            EmptyMessage = Products.Any() ? string.Empty : "Arama kriterlerinize uygun ürün bulunamadý";
+            EmptyMessage = Products.Any() ? string.Empty : "Arama kriterlerinize uygun Ã¼rÃ¼n bulunamadÄ±";
         }
 
         async partial void OnSearchTextChanged(string value)
         {
-            // Önceki gecikme görevini iptal et (kullanýcý hala yazýyor)
+            // Ã–nceki gecikme gÃ¶revini iptal et (kullanÄ±cÄ± hala yazÄ±yor)
             _searchCancellationTokenSource?.Cancel();
             _searchCancellationTokenSource = new CancellationTokenSource();
 
             try
             {
-                // Kullanýcýnýn yazmayý býrakmasý için 300 milisaniye bekle
+                // KullanÄ±cÄ±nÄ±n yazmayÄ± bÄ±rakmasÄ± iÃ§in 300 milisaniye bekle
                 await Task.Delay(300, _searchCancellationTokenSource.Token);
 
-                // Bekleme süresi dolduysa ve iptal edilmediyse, filtrelemeyi þimdi yap
+                // Bekleme sÃ¼resi dolduysa ve iptal edilmediyse, filtrelemeyi ÅŸimdi yap
                 ApplyFilters();
             }
             catch (TaskCanceledException)
             {
-                // Bu hata, kullanýcý hýzlý yazdýðýnda beklenen bir durumdur.
-                // Görevin iptal edildiðini gösterir, görmezden gelebiliriz.
+                // Bu hata, kullanÄ±cÄ± hÄ±zlÄ± yazdÄ±ÄŸÄ±nda beklenen bir durumdur.
+                // GÃ¶revin iptal edildiÄŸini gÃ¶sterir, gÃ¶rmezden gelebiliriz.
                 Debug.WriteLine("Arama ertelendi (debounced).");
             }
         }
@@ -246,6 +251,130 @@ namespace KamPay.ViewModels
             ApplyFilters();
         }
 
+
+        // âœ… RefreshCommand'i gÃ¼ncelle
+        [RelayCommand]
+        private async Task RefreshProductsAsync()
+        {
+            IsRefreshing = true;
+
+            try
+            {
+                // Cache'i temizle
+                _cacheManager.Clear();
+                _lastLoadedKey = null;
+
+                // Yeniden yÃ¼kle
+                await LoadProductsAsync();
+            }
+            finally
+            {
+                IsRefreshing = false;
+            }
+        }
+
+        // âœ… LoadProductsAsync'e cache kontrolÃ¼ ekle
+        [RelayCommand]
+        private async Task LoadProductsAsync()
+        {
+            if (IsLoading) return;
+
+            try
+            {
+                IsLoading = true;
+
+                // ðŸ”¥ Ã–nce cache'e bak
+                if (_cacheManager.TryGet(CACHE_KEY, out var cachedProducts))
+                {
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        Products.Clear();
+                        foreach (var p in cachedProducts) Products.Add(p);
+                    });
+                    return;
+                }
+
+                // Cache yoksa network'ten al
+                var productsResult = await Task.Run(async () =>
+                {
+                    var filter = new ProductFilter
+                    {
+                        SearchText = SearchText,
+                        CategoryId = SelectedCategory?.CategoryId,
+                        OnlyActive = true,
+                        SortBy = ProductSortOption.Newest
+                    };
+
+                    return await _productService.GetProductsPagedAsync(20, null, filter);
+                });
+
+                if (productsResult.Success)
+                {
+                    // Cache'e kaydet
+                    _cacheManager.Set(CACHE_KEY, productsResult.Data, TimeSpan.FromMinutes(3));
+
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        Products.Clear();
+                        foreach (var product in productsResult.Data)
+                        {
+                            Products.Add(product);
+                        }
+                    });
+
+                    if (productsResult.Data.Any())
+                        _lastLoadedKey = productsResult.Data.Last().ProductId;
+                }
+            }
+            catch (Exception ex)
+            {
+                EmptyMessage = $"Hata: {ex.Message}";
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        [RelayCommand]
+        private async Task LoadMoreProductsAsync()
+        {
+            if (_isLoadingMore || string.IsNullOrEmpty(_lastLoadedKey)) return;
+
+            try
+            {
+                _isLoadingMore = true;
+
+                var moreProducts = await Task.Run(async () =>
+                {
+                    var filter = new ProductFilter
+                    {
+                        SearchText = SearchText,
+                        CategoryId = SelectedCategory?.CategoryId,
+                        OnlyActive = true
+                    };
+
+                    return await _productService.GetProductsPagedAsync(20, _lastLoadedKey, filter);
+                });
+
+                if (moreProducts.Success && moreProducts.Data.Any())
+                {
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        foreach (var product in moreProducts.Data)
+                        {
+                            Products.Add(product);
+                        }
+                    });
+
+                    _lastLoadedKey = moreProducts.Data.Last().ProductId;
+                }
+            }
+            finally
+            {
+                _isLoadingMore = false;
+            }
+        }
         [RelayCommand]
         private void ClearFilters()
         {
@@ -281,33 +410,7 @@ namespace KamPay.ViewModels
             await Shell.Current.GoToAsync(nameof(NotificationsPage));
         }
 
-        [RelayCommand]
-        private async Task RefreshProductsAsync()
-        {
-            try
-            {
-                IsLoading = true;
-
-                // Firebase dinleyicisini sýfýrla (mevcut abonelikleri kapat)
-                _productSubscription?.Dispose();
-
-                // Yeniden dinlemeye baþla (mevcut metodunu çaðýrýyoruz)
-                StartListeningForProducts();
-
-                // Kategorileri de güncelle (isteðe baðlý)
-                await LoadCategoriesAsync();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[RefreshProductsAsync] Hata: {ex.Message}");
-            }
-            finally
-            {
-                IsLoading = false;
-                IsRefreshing = false; // RefreshView için eklemen gerekecek
-            }
-        }
-
+      
         [RelayCommand]
         private async Task GoToAddProductAsync()
         {
@@ -315,15 +418,15 @@ namespace KamPay.ViewModels
         }
         #endregion
 
-        #region Yardýmcý Metotlar
+        #region YardÄ±mcÄ± Metotlar
         private async Task LoadCategoriesAsync()
         {
-            // Yeni ve doðru servisi kullanýyoruz
+            // Yeni ve doÄŸru servisi kullanÄ±yoruz
             var categoryList = await _categoryService.GetCategoriesAsync();
 
             if (categoryList != null)
             {
-                // Mevcut XAML tasarýmýnýz "Tümü" butonunu kendi içinde barýndýrdýðý için,
+                // Mevcut XAML tasarÄ±mÄ±nÄ±z "TÃ¼mÃ¼" butonunu kendi iÃ§inde barÄ±ndÄ±rdÄ±ÄŸÄ± iÃ§in,
                 // ViewModel'de tekrar eklememize gerek yok. Listeyi temizleyip gelen verilerle doldurmak yeterli.
                 Categories.Clear();
                 foreach (var category in categoryList)
@@ -354,7 +457,7 @@ namespace KamPay.ViewModels
 
         public string GetSortOptionText(ProductSortOption option)
         {
-            return option switch { ProductSortOption.Newest => "En Yeni", ProductSortOption.Oldest => "En Eski", ProductSortOption.PriceAsc => "Fiyat (Artan)", ProductSortOption.PriceDesc => "Fiyat (Azalan)", ProductSortOption.MostViewed => "En Çok Görüntülenen", ProductSortOption.MostFavorited => "En Çok Favorilenen", _ => "Sýrala" };
+            return option switch { ProductSortOption.Newest => "En Yeni", ProductSortOption.Oldest => "En Eski", ProductSortOption.PriceAsc => "Fiyat (Artan)", ProductSortOption.PriceDesc => "Fiyat (Azalan)", ProductSortOption.MostViewed => "En Ã‡ok GÃ¶rÃ¼ntÃ¼lenen", ProductSortOption.MostFavorited => "En Ã‡ok Favorilenen", _ => "SÄ±rala" };
         }
 
         public void Dispose()

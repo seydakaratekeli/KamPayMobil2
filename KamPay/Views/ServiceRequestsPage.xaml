@@ -18,76 +18,127 @@
         <toolkit:EventToCommandBehavior EventName="Appearing" Command="{Binding LoadRequestsCommand}" />
     </ContentPage.Behaviors>
 
-    <ScrollView>
-        <VerticalStackLayout Spacing="20">
-            <Frame Margin="10" Padding="15" BorderColor="LightGray">
-                <VerticalStackLayout>
-                    <Label Text="Gelen Talepler" FontSize="Title" FontAttributes="Bold" Padding="0,0,0,10"/>
-                    <CollectionView ItemsSource="{Binding IncomingRequests}">
-                        <CollectionView.ItemTemplate>
-                            <DataTemplate x:DataType="models:ServiceRequest">
-                                <Frame Padding="10" Margin="0,5" BorderColor="Gainsboro">
-                                    <VerticalStackLayout Spacing="5">
-                                        <Label Text="{Binding ServiceTitle}" FontAttributes="Bold"/>
-                                        <Label Text="{Binding RequesterName, StringFormat='Talep Eden: {0}'}"/>
-                                        <Label Text="{Binding Status, StringFormat='Durum: {0}'}" />
+    <!-- 🔥 Tüm sayfa tek bir Grid içinde -->
+    <Grid>
 
-                                        <HorizontalStackLayout Spacing="10" IsVisible="{Binding Status, Converter={StaticResource IsPendingConverter}}">
-                                            <Button Text="Onayla" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=AcceptRequestCommand}" CommandParameter="{Binding .}" />
-                                            <Button Text="Reddet" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=DeclineRequestCommand}" CommandParameter="{Binding .}" BackgroundColor="Red" />
-                                        </HorizontalStackLayout>
+        <!-- ✅ RefreshView ana içerik -->
+        <RefreshView Command="{Binding RefreshRequestsCommand}" 
+                     IsRefreshing="{Binding IsRefreshing}">
+
+            <ScrollView>
+                <VerticalStackLayout Spacing="20">
+
+                    <!-- Gelen Talepler -->
+                    <Frame Margin="10" Padding="15" BorderColor="LightGray">
+                        <VerticalStackLayout>
+                            <Label Text="Gelen Talepler" FontSize="Title" FontAttributes="Bold" Padding="0,0,0,10"/>
+                            <CollectionView ItemsSource="{Binding IncomingRequests}">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:ServiceRequest">
+                                        <Frame Padding="10" Margin="0,5" BorderColor="Gainsboro">
+                                            <VerticalStackLayout Spacing="5">
+                                                <Label Text="{Binding ServiceTitle}" FontAttributes="Bold"/>
+                                                <Label Text="{Binding RequesterName, StringFormat='Talep Eden: {0}'}"/>
+                                                <Label Text="{Binding Status, StringFormat='Durum: {0}'}" />
+
+                                                <HorizontalStackLayout Spacing="10" IsVisible="{Binding Status, Converter={StaticResource IsPendingConverter}}">
+                                                    <Button Text="Onayla" 
+                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=AcceptRequestCommand}" 
+                                                            CommandParameter="{Binding .}" />
+                                                    <Button Text="Reddet" 
+                                                            BackgroundColor="Red"
+                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=DeclineRequestCommand}" 
+                                                            CommandParameter="{Binding .}" />
+                                                </HorizontalStackLayout>
+                                            </VerticalStackLayout>
+                                        </Frame>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+
+                                <CollectionView.EmptyView>
+                                    <VerticalStackLayout Padding="20" VerticalOptions="Center">
+                                        <Label Text="📥"
+                                               FontSize="40"
+                                               HorizontalTextAlignment="Center"
+                                               Opacity="0.3"/>
+                                        <Label Text="Henüz size gelen bir hizmet talebi yok." 
+                                               Padding="20" 
+                                               HorizontalTextAlignment="Center"
+                                               TextColor="{StaticResource Gray600}"/>
                                     </VerticalStackLayout>
-                                </Frame>
-                            </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                        <CollectionView.EmptyView>
-                            <Label Text="Henüz size gelen bir hizmet talebi yok." Padding="20" HorizontalTextAlignment="Center"/>
-                        </CollectionView.EmptyView>
-                    </CollectionView>
-                </VerticalStackLayout>
-            </Frame>
+                                </CollectionView.EmptyView>
+                            </CollectionView>
+                        </VerticalStackLayout>
+                    </Frame>
 
-            <Frame Margin="10" Padding="15" BorderColor="LightGray">
-                <VerticalStackLayout>
-                    <Label Text="Giden Talepler" FontSize="Title" FontAttributes="Bold" Padding="0,0,0,10"/>
-                    <CollectionView ItemsSource="{Binding OutgoingRequests}">
-                        <CollectionView.ItemTemplate>
-                            <DataTemplate x:DataType="models:ServiceRequest">
-                                <Frame Padding="10" Margin="0,5" BorderColor="Gainsboro">
-                                    
-                                    <VerticalStackLayout Spacing="5">
-                                        <Label Text="{Binding ServiceTitle}" FontAttributes="Bold"/>
-                                        <Label Text="{Binding Status, StringFormat='Durum: {0}'}" />
+                    <!-- Giden Talepler -->
+                    <Frame Margin="10" Padding="15" BorderColor="LightGray">
+                        <VerticalStackLayout>
+                            <Label Text="Giden Talepler" FontSize="Title" FontAttributes="Bold" Padding="0,0,0,10"/>
+                            <CollectionView ItemsSource="{Binding OutgoingRequests}">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:ServiceRequest">
+                                        <Frame Padding="10" Margin="0,5" BorderColor="Gainsboro">
+                                            <VerticalStackLayout Spacing="5">
+                                                <Label Text="{Binding ServiceTitle}" FontAttributes="Bold"/>
+                                                <Label Text="{Binding Status, StringFormat='Durum: {0}'}" />
 
-                                        <!-- 🟢 Ödeme yöntemi seçimi alanı -->
-                                        <StackLayout Margin="0,5,0,0" Spacing="8"
-                 IsVisible="{Binding Status, Converter={StaticResource IsAcceptedConverter}}">
-                                            <Label Text="Ödeme Yöntemi Seçin:" FontAttributes="Bold" />
-                                            <Picker Title="Seçiniz"
-                ItemsSource="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=PaymentMethods}"
-                ItemDisplayBinding="{Binding DisplayName}"
-                SelectedIndexChanged="OnPaymentMethodSelected"/>
-                                        </StackLayout>
+                                                <!-- 🟢 Ödeme yöntemi seçimi alanı -->
+                                                <StackLayout Margin="0,5,0,0" Spacing="8"
+                                                             IsVisible="{Binding Status, Converter={StaticResource IsAcceptedConverter}}">
+                                                    <Label Text="Ödeme Yöntemi Seçin:" FontAttributes="Bold" />
+                                                    <Picker Title="Seçiniz"
+                                                            ItemsSource="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=PaymentMethods}"
+                                                            ItemDisplayBinding="{Binding DisplayName}"
+                                                            SelectedIndexChanged="OnPaymentMethodSelected"/>
+                                                </StackLayout>
 
-                                        <!-- 🟢 Tamamla butonu (var olan kodun) -->
-                                        <Button Text="Tamamlandı Olarak İşaretle"
-            IsVisible="{Binding Status, Converter={StaticResource IsAcceptedConverter}}"
-            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=CompleteRequestCommand}" 
-            CommandParameter="{Binding .}" />
+                                                <!-- 🟢 Tamamla butonu -->
+                                                <Button Text="Tamamlandı Olarak İşaretle"
+                                                        IsVisible="{Binding Status, Converter={StaticResource IsAcceptedConverter}}"
+                                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ServiceRequestsViewModel}}, Path=CompleteRequestCommand}" 
+                                                        CommandParameter="{Binding .}" />
+                                            </VerticalStackLayout>
+                                        </Frame>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+
+                                <CollectionView.EmptyView>
+                                    <VerticalStackLayout Padding="20" VerticalOptions="Center">
+                                        <Label Text="📤"
+                                               FontSize="40"
+                                               HorizontalTextAlignment="Center"
+                                               Opacity="0.3"/>
+                                        <Label Text="Henüz gönderdiğiniz bir hizmet talebi yok." 
+                                               Padding="20" 
+                                               HorizontalTextAlignment="Center"
+                                               TextColor="{StaticResource Gray600}"/>
                                     </VerticalStackLayout>
+                                </CollectionView.EmptyView>
+                            </CollectionView>
+                        </VerticalStackLayout>
+                    </Frame>
 
-                                    
-                                </Frame>
-                            </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                        <CollectionView.EmptyView>
-                            <Label Text="Henüz gönderdiğiniz bir hizmet talebi yok." Padding="20" HorizontalTextAlignment="Center"/>
-                        </CollectionView.EmptyView>
-                    </CollectionView>
                 </VerticalStackLayout>
-            </Frame>
+            </ScrollView>
+        </RefreshView>
+        <!-- 🔹 BURADA KAPANIYOR -->
 
-            <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" HorizontalOptions="Center" VerticalOptions="Center"/>
-        </VerticalStackLayout>
-    </ScrollView>
+        <!-- ✅ Loading Overlay en üstte -->
+        <Grid IsVisible="{Binding IsLoading}"
+              BackgroundColor="#80FFFFFF"
+              InputTransparent="False">
+            <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="10">
+                <ActivityIndicator IsRunning="True" 
+                                   Color="{StaticResource Primary}"
+                                   WidthRequest="40"
+                                   HeightRequest="40"/>
+                <Label Text="Talepler yükleniyor..."
+                       TextColor="{StaticResource Primary}"
+                       FontSize="14"
+                       HorizontalTextAlignment="Center"/>
+            </VerticalStackLayout>
+        </Grid>
+
+    </Grid>
 </ContentPage>
