@@ -11,6 +11,7 @@ namespace KamPay.ViewModels
     {
         private readonly ISurpriseBoxService _surpriseBoxService;
         private readonly IAuthenticationService _authenticationService;
+        private readonly IUserProfileService _userProfileService; // 🔥 YENİ
 
         [ObservableProperty]
         private bool isLoading;
@@ -25,15 +26,47 @@ namespace KamPay.ViewModels
         [ObservableProperty]
         private bool canRedeem = true;
 
-        public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
+        // 🔥 YENİ: Kullanıcının mevcut puanını göster
+        [ObservableProperty]
+        private int userPoints;
 
-        // Event for the View to subscribe to
+        [ObservableProperty]
+        private string successMessage; // 🔥 YENİ
+
+        public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
         public event EventHandler<bool> RedemptionCompleted;
 
-        public SurpriseBoxViewModel(ISurpriseBoxService surpriseBoxService, IAuthenticationService authenticationService)
+        public SurpriseBoxViewModel(
+            ISurpriseBoxService surpriseBoxService,
+            IAuthenticationService authenticationService,
+            IUserProfileService userProfileService) // 🔥 YENİ
         {
             _surpriseBoxService = surpriseBoxService;
             _authenticationService = authenticationService;
+            _userProfileService = userProfileService; // 🔥 YENİ
+
+            _ = LoadUserPointsAsync(); // 🔥 YENİ
+        }
+
+        // 🔥 YENİ: Kullanıcı puanlarını yükle
+        private async Task LoadUserPointsAsync()
+        {
+            try
+            {
+                var user = await _authenticationService.GetCurrentUserAsync();
+                if (user != null)
+                {
+                    var statsResult = await _userProfileService.GetUserStatsAsync(user.UserId);
+                    if (statsResult.Success)
+                    {
+                        UserPoints = statsResult.Data.Points;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ Puan yükleme hatası: {ex.Message}");
+            }
         }
 
         [RelayCommand]
@@ -46,6 +79,7 @@ namespace KamPay.ViewModels
                 IsLoading = true;
                 CanRedeem = false;
                 ErrorMessage = string.Empty;
+                SuccessMessage = string.Empty; // 🔥 YENİ
 
                 var user = await _authenticationService.GetCurrentUserAsync();
                 if (user == null)
@@ -60,6 +94,11 @@ namespace KamPay.ViewModels
                 if (result.Success && result.Data != null)
                 {
                     RedemptionResult = result.Data;
+                    SuccessMessage = result.Message; // 🔥 YENİ
+
+                    // 🔥 Puanları güncelle
+                    await LoadUserPointsAsync();
+
                     RedemptionCompleted?.Invoke(this, true);
                 }
                 else
@@ -71,13 +110,12 @@ namespace KamPay.ViewModels
             catch (Exception ex)
             {
                 ErrorMessage = "Beklenmedik bir hata oluştu.";
+                Console.WriteLine($"❌ RedeemBox hatası: {ex.Message}");
                 RedemptionCompleted?.Invoke(this, false);
             }
             finally
             {
                 IsLoading = false;
-                // 'CanRedeem'i burada true yapmıyoruz,
-                // kullanıcı sonuç ekranını kapattığında ResetCommand ile yapacağız.
             }
         }
 
@@ -85,8 +123,15 @@ namespace KamPay.ViewModels
         private void Reset()
         {
             ErrorMessage = string.Empty;
+            SuccessMessage = string.Empty; // 🔥 YENİ
             RedemptionResult = null;
             CanRedeem = true;
+        }
+
+        // 🔥 YENİ: Sayfadan çıkınca puanları yenile
+        public async Task RefreshAsync()
+        {
+            await LoadUserPointsAsync();
         }
     }
 }

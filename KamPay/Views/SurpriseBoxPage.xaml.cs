@@ -1,30 +1,39 @@
-using KamPay.ViewModels;
+ï»¿using KamPay.ViewModels;
 
 namespace KamPay.Views;
 
 public partial class SurpriseBoxPage : ContentPage
 {
+    private readonly SurpriseBoxViewModel _viewModel;
+
     public SurpriseBoxPage(SurpriseBoxViewModel vm)
     {
         InitializeComponent();
-        BindingContext = vm;
+        _viewModel = vm;
+        BindingContext = _viewModel;
 
-        // ViewModel'de iþlem tamamlandýðýnda animasyonu tetikle
-        vm.RedemptionCompleted += OnRedemptionCompleted;
+        _viewModel.RedemptionCompleted += OnRedemptionCompleted;
+    }
+
+    // ðŸ”¥ Sayfa her gÃ¶rÃ¼ndÃ¼ÄŸÃ¼nde puanlarÄ± yenile
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        await _viewModel.RefreshAsync();
     }
 
     private async void OnRedemptionCompleted(object sender, bool success)
     {
         if (success)
         {
-            // Basit bir sallanma animasyonu
+            // Animasyon
             await BoxImage.RotateTo(-15, 100);
             await BoxImage.RotateTo(15, 100);
             await BoxImage.RotateTo(-10, 100);
             await BoxImage.RotateTo(10, 100);
             await BoxImage.RotateTo(0, 100);
 
-            // Sonuçlarý göster
+            // SonuÃ§larÄ± gÃ¶ster
             ResultFrame.IsVisible = true;
             await ResultFrame.FadeTo(1, 400);
         }
@@ -35,20 +44,18 @@ public partial class SurpriseBoxPage : ContentPage
         await ResultFrame.FadeTo(0, 400);
         ResultFrame.IsVisible = false;
 
-        // ViewModel'i sýfýrla
-        if (BindingContext is SurpriseBoxViewModel vm)
+        // ðŸ”¥ YENÄ°: KazanÄ±lan Ã¼rÃ¼nÃ¼n detay sayfasÄ±na git
+        if (_viewModel.RedemptionResult != null)
         {
-            vm.ResetCommand.Execute(null);
+            await Shell.Current.GoToAsync($"ProductDetailPage?productId={_viewModel.RedemptionResult.ProductId}");
         }
+
+        _viewModel.ResetCommand.Execute(null);
     }
 
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-        // Event aboneliðini kaldýrarak bellek sýzýntýsýný önle
-        if (BindingContext is SurpriseBoxViewModel vm)
-        {
-            vm.RedemptionCompleted -= OnRedemptionCompleted;
-        }
+        _viewModel.RedemptionCompleted -= OnRedemptionCompleted;
     }
 }

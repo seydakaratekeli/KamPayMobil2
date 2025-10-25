@@ -1,6 +1,9 @@
+ï»¿using System;
+using System.Collections.Generic;
+
 namespace KamPay.Models;
 
-// Rozet (Badge) modeli - Oyunlaþtýrma için
+// Rozet (Badge) modeli - OyunlaÅŸtÄ±rma iÃ§in
 public class Badge
 {
     public string BadgeId { get; set; }
@@ -9,87 +12,91 @@ public class Badge
     public string IconName { get; set; }
     public BadgeCategory Category { get; set; }
     public int RequiredPoints { get; set; }
-    public int RequiredCount { get; set; } // Örn: 10 ürün sat
+    public int RequiredCount { get; set; } // Ã–rn: 10 Ã¼rÃ¼n sat
     public string Color { get; set; }
+
+    // ðŸ”¥ YENÄ°: CreatedAt property'si eklendi
+    public DateTime CreatedAt { get; set; }
 
     public Badge()
     {
         BadgeId = Guid.NewGuid().ToString();
+        CreatedAt = DateTime.UtcNow; // ðŸ”¥ YENÄ°
     }
 
-    // Varsayýlan rozetler
+    // VarsayÄ±lan rozetler
     public static List<Badge> GetDefaultBadges()
     {
         return new List<Badge>
+        {
+            new Badge
             {
-                new Badge
-                {
-                    Name = "Ýlk Adým",
-                    Description = "Ýlk ürününü ekledin!",
-                    IconName = "badge_first.png",
-                    Category = BadgeCategory.Seller,
-                    RequiredCount = 1,
-                    Color = "#4CAF50"
-                },
-                new Badge
-                {
-                    Name = "Paylaþým Kahramaný",
-                    Description = "5 ürün paylaþtýn",
-                    IconName = "badge_hero.png",
-                    Category = BadgeCategory.Seller,
-                    RequiredCount = 5,
-                    Color = "#2196F3"
-                },
-                new Badge
-                {
-                    Name = "Baðýþ Meleði",
-                    Description = "3 ürün baðýþladýn",
-                    IconName = "badge_angel.png",
-                    Category = BadgeCategory.Donation,
-                    RequiredCount = 3,
-                    Color = "#FF9800"
-                },
-                new Badge
-                {
-                    Name = "Aktif Alýcý",
-                    Description = "5 ürün aldýn",
-                    IconName = "badge_buyer.png",
-                    Category = BadgeCategory.Buyer,
-                    RequiredCount = 5,
-                    Color = "#9C27B0"
-                },
-                new Badge
-                {
-                    Name = "Süper Satýcý",
-                    Description = "10 ürün sattýn",
-                    IconName = "badge_super_seller.png",
-                    Category = BadgeCategory.Seller,
-                    RequiredCount = 10,
-                    Color = "#FF5722"
-                },
-                new Badge
-                {
-                    Name = "Kampüs Yýldýzý",
-                    Description = "100 puana ulaþtýn",
-                    IconName = "badge_star.png",
-                    Category = BadgeCategory.Points,
-                    RequiredPoints = 100,
-                    Color = "#FFC107"
-                }
-            };
+                Name = "Ä°lk AdÄ±m",
+                Description = "Ä°lk Ã¼rÃ¼nÃ¼nÃ¼ ekledin!",
+                IconName = "badge_first.png",
+                Category = BadgeCategory.Seller,
+                RequiredCount = 1,
+                Color = "#4CAF50"
+            },
+            new Badge
+            {
+                Name = "PaylaÅŸÄ±m KahramanÄ±",
+                Description = "5 Ã¼rÃ¼n paylaÅŸtÄ±n",
+                IconName = "badge_hero.png",
+                Category = BadgeCategory.Seller,
+                RequiredCount = 5,
+                Color = "#2196F3"
+            },
+            new Badge
+            {
+                Name = "BaÄŸÄ±ÅŸ MeleÄŸi",
+                Description = "3 Ã¼rÃ¼n baÄŸÄ±ÅŸladÄ±n",
+                IconName = "badge_angel.png",
+                Category = BadgeCategory.Donation,
+                RequiredCount = 3,
+                Color = "#FF9800"
+            },
+            new Badge
+            {
+                Name = "Aktif AlÄ±cÄ±",
+                Description = "5 Ã¼rÃ¼n aldÄ±n",
+                IconName = "badge_buyer.png",
+                Category = BadgeCategory.Buyer,
+                RequiredCount = 5,
+                Color = "#9C27B0"
+            },
+            new Badge
+            {
+                Name = "SÃ¼per SatÄ±cÄ±",
+                Description = "10 Ã¼rÃ¼n sattÄ±n",
+                IconName = "badge_super_seller.png",
+                Category = BadgeCategory.Seller,
+                RequiredCount = 10,
+                Color = "#FF5722"
+            },
+            new Badge
+            {
+                Name = "KampÃ¼s YÄ±ldÄ±zÄ±",
+                Description = "100 puana ulaÅŸtÄ±n",
+                IconName = "badge_star.png",
+                Category = BadgeCategory.Points,
+                RequiredPoints = 100,
+                Color = "#FFC107"
+            }
+        };
     }
 }
 
 public enum BadgeCategory
 {
-    Seller = 0,    // Satýcý rozetleri
-    Buyer = 1,     // Alýcý rozetleri
-    Donation = 2,  // Baðýþ rozetleri
+    Seller = 0,    // SatÄ±cÄ± rozetleri
+    Buyer = 1,     // AlÄ±cÄ± rozetleri
+    Donation = 2,  // BaÄŸÄ±ÅŸ rozetleri
     Points = 3,    // Puan rozetleri
-    Special = 4    // Özel rozetler
+    Special = 4    // Ã–zel rozetler
 }
 
-// Kullanýcý rozeti (User'ýn kazandýðý rozetler)
+// KullanÄ±cÄ± rozeti (User'Ä±n kazandÄ±ÄŸÄ± rozetler)
 public class UserBadge
 {
     public string UserBadgeId { get; set; }
@@ -97,7 +104,7 @@ public class UserBadge
     public string BadgeId { get; set; }
     public DateTime EarnedAt { get; set; }
 
-    // Badge bilgileri (cache için)
+    // Badge bilgileri (cache iÃ§in)
     public string BadgeName { get; set; }
     public string BadgeIcon { get; set; }
     public string BadgeColor { get; set; }

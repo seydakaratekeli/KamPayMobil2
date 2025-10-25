@@ -1,4 +1,4 @@
-namespace KamPay.Models;
+ï»¿namespace KamPay.Models;
 
 // Bildirim modeli
 public class Notification
@@ -15,7 +15,7 @@ public class Notification
 
  
 
-    // Ýlgili veri (ürün, mesaj vb.)
+    // Ä°lgili veri (Ã¼rÃ¼n, mesaj vb.)
     public string RelatedEntityId { get; set; }
     public string RelatedEntityType { get; set; } // "Product", "Message", "Badge" vb.
 
@@ -36,13 +36,13 @@ public class Notification
             var diff = DateTime.UtcNow - CreatedAt;
 
             if (diff.TotalMinutes < 1)
-                return "Az önce";
+                return "Az Ã¶nce";
             if (diff.TotalMinutes < 60)
-                return $"{(int)diff.TotalMinutes} dakika önce";
+                return $"{(int)diff.TotalMinutes} dakika Ã¶nce";
             if (diff.TotalHours < 24)
-                return $"{(int)diff.TotalHours} saat önce";
+                return $"{(int)diff.TotalHours} saat Ã¶nce";
             if (diff.TotalDays < 7)
-                return $"{(int)diff.TotalDays} gün önce";
+                return $"{(int)diff.TotalDays} gÃ¼n Ã¶nce";
 
             return CreatedAt.ToString("dd MMM yyyy");
         }
@@ -51,15 +51,18 @@ public class Notification
 
 public enum NotificationType
 {
+    SurpriseBoxWon,      // ðŸ”¥ YENÄ°: SÃ¼rpriz kutu kazanÄ±ldÄ±
+    DonationClaimed,     // ðŸ”¥ YENÄ°: BaÄŸÄ±ÅŸ deÄŸerlendirildi
     NewMessage = 0,      // Yeni mesaj
-    ProductSold = 1,     // Ürün satýldý
-    ProductViewed = 2,   // Ürününüz görüntülendi
-    NewFavorite = 3,     // Ürününüz favorilere eklendi
-    BadgeEarned = 4,     // Rozet kazandýnýz
-    PointsEarned = 5,    // Puan kazandýnýz
-    DonationMade = 6,    // Baðýþ yapýldý
+    ProductSold = 1,     // ÃœrÃ¼n satÄ±ldÄ±
+    ProductViewed = 2,   // ÃœrÃ¼nÃ¼nÃ¼z gÃ¶rÃ¼ntÃ¼lendi
+    NewFavorite = 3,     // ÃœrÃ¼nÃ¼nÃ¼z favorilere eklendi
+    BadgeEarned = 4,     // Rozet kazandÄ±nÄ±z
+    PointsEarned = 5,    // Puan kazandÄ±nÄ±z
+    DonationMade = 6,    // BaÄŸÄ±ÅŸ yapÄ±ldÄ±
     SystemNotice = 7,    // Sistem bildirimi
          NewOffer = 8,         // Yeni teklif/istek geldi
     OfferAccepted = 9,    // Teklifin kabul edildi
     OfferRejected = 10    // Teklifin reddedildi
+
 }

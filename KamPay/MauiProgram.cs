@@ -74,8 +74,13 @@ namespace KamPay
             builder.Services.AddSingleton<IFirebaseObserverService, FirebaseObserverService>();
             builder.Services.AddSingleton<IProductCacheService, ProductCacheService>();
             builder.Services.AddSingleton<IReverseGeocodeService, ReverseGeocodeService>();
-            builder.Services.AddSingleton<ISurpriseBoxService, FirebaseSurpriseBoxService>();
-            builder.Services.AddSingleton<IGoodDeedService, FirebaseGoodDeedService>();
+            builder.Services.AddSingleton<ISurpriseBoxService>(sp =>
+                new FirebaseSurpriseBoxService(
+                    sp.GetRequiredService<IUserProfileService>(),
+                    sp.GetRequiredService<IProductService>(),
+                    sp.GetRequiredService<INotificationService>() // 🔥 YENİ
+                )
+            ); builder.Services.AddSingleton<IGoodDeedService, FirebaseGoodDeedService>();
 
             builder.Services.AddSingleton<IServiceSharingService>(sp =>
      new FirebaseServiceSharingService(
