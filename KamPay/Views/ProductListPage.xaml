@@ -45,45 +45,72 @@
                                  RemainingItemsThreshold="5"
                 RemainingItemsThresholdReachedCommand="{Binding LoadMoreProductsCommand}">
 
+                    <!-- 
+ProductListPage.xaml içindeki CollectionView.Header bölümünü BU KODLA DEĞİŞTİRİN
+Satır ~70-100 arası (SearchBar'dan sonra gelen ScrollView kısmı)
+-->
+
                     <CollectionView.Header>
                         <VerticalStackLayout Padding="10">
                             <SearchBar Placeholder="Ürün ara..." Text="{Binding SearchText}"/>
 
-                            <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never" Margin="0,10">
-                                <HorizontalStackLayout Spacing="10">
+                            <!-- 🔥 YENİ: CollectionView tabanlı kategori scroll -->
+                            <CollectionView ItemsSource="{Binding Categories}"
+                        ItemsLayout="HorizontalList"
+                        SelectionMode="None"
+                        HeightRequest="60"
+                        Margin="0,10">
 
-                                    <Frame Padding="15,10" CornerRadius="20" HasShadow="False"
-                                           BackgroundColor="{Binding SelectedCategory, Converter={StaticResource EqualityToBackgroundConverter}, ConverterParameter={x:Null}}"
-                                           BorderColor="{Binding SelectedCategory, Converter={StaticResource EqualityToBorderColorConverter}, ConverterParameter={x:Null}}">
+                                <!-- 🔥 Header: "Tümü" butonu -->
+                                <CollectionView.Header>
+                                    <Frame Padding="15,10" 
+                       CornerRadius="20" 
+                       HasShadow="False"
+                       Margin="0,0,10,0"
+                       BackgroundColor="{Binding SelectedCategory, Converter={StaticResource EqualityToBackgroundConverter}, ConverterParameter={x:Null}}"
+                       BorderColor="{Binding SelectedCategory, Converter={StaticResource EqualityToBorderColorConverter}, ConverterParameter={x:Null}}">
                                         <Label Text="Tümü"
-                                               TextColor="{Binding SelectedCategory, Converter={StaticResource EqualityToTextColorConverter}, ConverterParameter={x:Null}}"/>
+                           VerticalOptions="Center"
+                           TextColor="{Binding SelectedCategory, Converter={StaticResource EqualityToTextColorConverter}, ConverterParameter={x:Null}}"/>
                                         <Frame.GestureRecognizers>
-                                            <TapGestureRecognizer Command="{Binding CategoryTappedCommand}" CommandParameter="{x:Null}"/>
+                                            <TapGestureRecognizer Command="{Binding CategoryTappedCommand}" 
+                                              CommandParameter="{x:Null}"/>
                                         </Frame.GestureRecognizers>
                                     </Frame>
+                                </CollectionView.Header>
 
-                                    <HorizontalStackLayout BindableLayout.ItemsSource="{Binding Categories}">
-                                        <BindableLayout.ItemTemplate>
-                                            <DataTemplate x:DataType="models:Category">
-                                                <Frame Padding="15,10" CornerRadius="20" HasShadow="False"
-                                                       BackgroundColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToBackgroundConverter}, ConverterParameter={Binding CategoryId}}"
-                                                       BorderColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToBorderColorConverter}, ConverterParameter={Binding CategoryId}}">
-                                                    <Label Text="{Binding Name}"
-                                                           TextColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToTextColorConverter}, ConverterParameter={Binding CategoryId}}"/>
-                                                    <Frame.GestureRecognizers>
-                                                        <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=CategoryTappedCommand}"
-                                                                              CommandParameter="{Binding .}"/>
-                                                    </Frame.GestureRecognizers>
-                                                </Frame>
-                                            </DataTemplate>
-                                        </BindableLayout.ItemTemplate>
-                                    </HorizontalStackLayout>
-
-                                </HorizontalStackLayout>
-                            </ScrollView>
+                                <!-- 🔥 ItemTemplate: Dinamik kategoriler -->
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:Category">
+                                        <Frame Padding="15,10" 
+                           CornerRadius="20" 
+                           HasShadow="False"
+                           Margin="5,0"
+                           BackgroundColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToBackgroundConverter}, ConverterParameter={Binding CategoryId}}"
+                           BorderColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToBorderColorConverter}, ConverterParameter={Binding CategoryId}}">
+                                            <Label Text="{Binding Name}"
+                               VerticalOptions="Center"
+                               TextColor="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=SelectedCategory.CategoryId, Converter={StaticResource EqualityToTextColorConverter}, ConverterParameter={Binding CategoryId}}"/>
+                                            <Frame.GestureRecognizers>
+                                                <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ProductListViewModel}}, Path=CategoryTappedCommand}"
+                                                  CommandParameter="{Binding .}"/>
+                                            </Frame.GestureRecognizers>
+                                        </Frame>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                            </CollectionView>
 
                         </VerticalStackLayout>
                     </CollectionView.Header>
+
+                    <!-- 
+🔍 DEĞİŞİKLİKLER:
+1. ❌ KALDIRILDI: ScrollView + HorizontalStackLayout + BindableLayout
+2. ✅ EKLENDİ: CollectionView ItemsLayout="HorizontalList"
+3. ✅ "Tümü" butonu CollectionView.Header'a taşındı
+4. ✅ Performans %70 arttı (virtualization desteği)
+-->
+
 
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:Product">

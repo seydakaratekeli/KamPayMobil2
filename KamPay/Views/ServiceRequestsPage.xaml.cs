@@ -1,27 +1,51 @@
-using KamPay.ViewModels;
+ï»¿using KamPay.ViewModels;
 
-namespace KamPay.Views;
-
-public partial class ServiceRequestsPage : ContentPage
+namespace KamPay.Views
 {
-    public ServiceRequestsPage(ServiceRequestsViewModel vm)
+    public partial class ServiceRequestsPage : ContentPage
     {
-        InitializeComponent();
-        BindingContext = vm;
-    }
+        private readonly ServiceRequestsViewModel _viewModel;
 
-    private void OnPaymentMethodSelected(object sender, EventArgs e)
-    {
-        var picker = sender as Picker;
-        if (picker?.SelectedItem is ServiceRequestsViewModel.PaymentOption option)
+        public ServiceRequestsPage(ServiceRequestsViewModel vm)
         {
-            var vm = BindingContext as ServiceRequestsViewModel;
-            if (vm != null)
-                vm.SelectedPaymentMethod = option.Method;
+            InitializeComponent();
+            _viewModel = vm;
+            BindingContext = _viewModel;
+        }
+
+        // âœ… Picker event handler - gÃ¼venli null check
+        private void OnPaymentMethodSelected(object sender, EventArgs e)
+        {
+            if (sender is Picker picker &&
+                picker.SelectedItem is ServiceRequestsViewModel.PaymentOption option)
+            {
+                // ğŸ”¥ Direkt _viewModel kullan, BindingContext'e gÃ¼venme
+                if (_viewModel != null)
+                {
+                    _viewModel.SelectedPaymentMethod = option.Method;
+                    System.Diagnostics.Debug.WriteLine($"ğŸ’³ Ã–deme yÃ¶ntemi seÃ§ildi: {option.DisplayName}");
+                }
+            }
+        }
+
+        protected override void OnAppearing()
+        {
+            base.OnAppearing();
+            System.Diagnostics.Debug.WriteLine("âœ… ServiceRequestsPage: Aktif");
+        }
+
+        protected override void OnDisappearing()
+        {
+            base.OnDisappearing();
+            // ğŸ”¥ Burada Dispose ETME!
+            System.Diagnostics.Debug.WriteLine("â¸ï¸ ServiceRequestsPage: Arka plana alÄ±ndÄ±");
+        }
+
+        // ğŸ”¥ Sayfa bellekten kaldÄ±rÄ±lÄ±nca otomatik Ã§aÄŸrÄ±lÄ±r
+        ~ServiceRequestsPage()
+        {
+            _viewModel?.Dispose();
+            System.Diagnostics.Debug.WriteLine("ğŸ—‘ï¸ ServiceRequestsPage: Dispose edildi");
         }
     }
-
-    // Gördüğünüz gibi, OnAppearing, AcceptButton_Clicked ve
-    // DeclineButton_Clicked metotlarının HEPSİNİ SİLDİK.
-    // Çünkü artık bu işleri doğrudan XAML hallediyor.
 }

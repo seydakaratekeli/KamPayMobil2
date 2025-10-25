@@ -173,46 +173,124 @@ namespace KamPay.ViewModels
                 });
         }
 
+        // ProductListViewModel.cs içindeki ApplyFilters metodunu BU KODLA DEĞİŞTİRİN
+
         private void ApplyFilters()
         {
-            IEnumerable<Product> filtered = _allProducts.Where(p => p.IsActive && !p.IsSold);
-
-            if (SelectedCategory != null && !string.IsNullOrEmpty(SelectedCategory.CategoryId))
+            try
             {
-                filtered = filtered.Where(p => p.CategoryId == SelectedCategory.CategoryId);
+                // 🔥 UI thread'de çalıştığımızdan emin ol
+                if (!MainThread.IsMainThread)
+                {
+                    MainThread.BeginInvokeOnMainThread(ApplyFilters);
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"🔍 ApplyFilters başladı. Toplam ürün: {_allProducts.Count}");
+
+                IEnumerable<Product> filtered = _allProducts.Where(p => p.IsActive && !p.IsSold);
+
+                // Kategori filtresi
+                if (SelectedCategory != null && !string.IsNullOrEmpty(SelectedCategory.CategoryId))
+                {
+                    filtered = filtered.Where(p => p.CategoryId == SelectedCategory.CategoryId);
+                    System.Diagnostics.Debug.WriteLine($"📂 Kategori filtresi: {SelectedCategory.Name}");
+                }
+
+                // Arama filtresi
+                if (!string.IsNullOrEmpty(SearchText))
+                {
+                    var searchLower = SearchText.ToLowerInvariant();
+                    filtered = filtered.Where(p =>
+                        p.Title.ToLowerInvariant().Contains(searchLower) ||
+                        p.Description.ToLowerInvariant().Contains(searchLower));
+                    System.Diagnostics.Debug.WriteLine($"🔎 Arama filtresi: {SearchText}");
+                }
+
+                // Tip filtresi
+                if (SelectedType.HasValue)
+                {
+                    filtered = filtered.Where(p => p.Type == SelectedType.Value);
+                }
+
+                // Sıralama
+                filtered = SelectedSortOption switch
+                {
+                    ProductSortOption.Oldest => filtered.OrderBy(p => p.CreatedAt),
+                    ProductSortOption.PriceAsc => filtered.OrderBy(p => p.Price),
+                    ProductSortOption.PriceDesc => filtered.OrderByDescending(p => p.Price),
+                    ProductSortOption.MostViewed => filtered.OrderByDescending(p => p.ViewCount),
+                    ProductSortOption.MostFavorited => filtered.OrderByDescending(p => p.FavoriteCount),
+                    _ => filtered.OrderByDescending(p => p.CreatedAt),
+                };
+
+                var filteredList = filtered.ToList();
+
+                // 🔥 OPTİMİZASYON: Sadece değişen ürünleri güncelle (Clear() yerine smart update)
+                UpdateProductsCollection(filteredList);
+
+                EmptyMessage = Products.Any() ? string.Empty : "Arama kriterlerinize uygun ürün bulunamadı";
+
+                System.Diagnostics.Debug.WriteLine($"✅ Filtreleme tamamlandı. Gösterilen: {Products.Count}");
             }
-
-            if (!string.IsNullOrEmpty(SearchText))
+            catch (Exception ex)
             {
-                filtered = filtered.Where(p => p.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
+                System.Diagnostics.Debug.WriteLine($"❌ ApplyFilters hatası: {ex.Message}");
             }
-
-            if (SelectedType.HasValue)
-            {
-                filtered = filtered.Where(p => p.Type == SelectedType.Value);
-            }
-
-            filtered = SelectedSortOption switch
-            {
-                ProductSortOption.Oldest => filtered.OrderBy(p => p.CreatedAt),
-                ProductSortOption.PriceAsc => filtered.OrderBy(p => p.Price),
-                ProductSortOption.PriceDesc => filtered.OrderByDescending(p => p.Price),
-                ProductSortOption.MostViewed => filtered.OrderByDescending(p => p.ViewCount),
-                ProductSortOption.MostFavorited => filtered.OrderByDescending(p => p.FavoriteCount),
-                _ => filtered.OrderByDescending(p => p.CreatedAt),
-            };
-
-            var filteredList = filtered.ToList();
-
-            Products.Clear();
-            foreach (var product in filteredList)
-            {
-                Products.Add(product);
-            }
-
-            EmptyMessage = Products.Any() ? string.Empty : "Arama kriterlerinize uygun ürün bulunamadı";
         }
 
+        // 🔥 YENİ METOT: Smart Collection Update (Clear() yerine)
+        private void UpdateProductsCollection(List<Product> newProducts)
+        {
+            // 1️⃣ Silinecekleri bul
+            var toRemove = Products
+                .Where(p => !newProducts.Any(np => np.ProductId == p.ProductId))
+                .ToList();
+
+            foreach (var item in toRemove)
+            {
+                Products.Remove(item);
+            }
+
+            // 2️⃣ Eklenecekleri veya güncellenecekleri bul
+            for (int i = 0; i < newProducts.Count; i++)
+            {
+                var newProduct = newProducts[i];
+                var existingIndex = -1;
+
+                for (int j = 0; j < Products.Count; j++)
+                {
+                    if (Products[j].ProductId == newProduct.ProductId)
+                    {
+                        existingIndex = j;
+                        break;
+                    }
+                }
+
+                if (existingIndex >= 0)
+                {
+                    // Güncelleme (pozisyon değişmişse taşı)
+                    if (existingIndex != i)
+                    {
+                        Products.Move(existingIndex, i);
+                    }
+                    // Veriler değişmişse güncelle
+                    Products[i] = newProduct;
+                }
+                else
+                {
+                    // Yeni ekleme
+                    if (i < Products.Count)
+                    {
+                        Products.Insert(i, newProduct);
+                    }
+                    else
+                    {
+                        Products.Add(newProduct);
+                    }
+                }
+            }
+        }
         async partial void OnSearchTextChanged(string value)
         {
             // Önceki gecikme görevini iptal et (kullanıcı hala yazıyor)
